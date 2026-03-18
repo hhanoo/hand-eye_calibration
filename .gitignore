@@ -1,0 +1,11 @@
+.vscode/
+.venv/
+
+__pycache__/
+
+# colcon build outputs
+build/
+install/
+log/
+
+module/ketirobotsdk/

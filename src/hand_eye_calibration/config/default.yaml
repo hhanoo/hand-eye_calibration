@@ -1,0 +1,26 @@
+hand_eye_calibration:
+  ros__parameters:
+    # Camera topics (realsense2_camera)
+    image_topic: "/camera/camera/color/image_raw"
+    camera_info_topic: "/camera/camera/color/camera_info"
+
+    # ArUco marker settings
+    marker_dict: 10  # cv2.aruco.DICT_6X6_250
+    board_grid_shape: [5, 7]
+    marker_length: 0.037  # meters
+    marker_separation: 0.003  # meters
+
+    # Robot pose acquisition mode: "keti_sdk" or "ros2_tf"
+    robot_mode: "keti_sdk"
+
+    # KETIRobotSDK settings
+    keti_robot_type: 2  # 0=TestDummy, 1=RB10, 2=UR10, 3=M1013, 4=Indy7
+    keti_robot_ip: "192.168.1.77"
+    keti_robot_port: 30003
+
+    # ROS2 TF settings (when robot_mode is "ros2_tf")
+    tf_base_frame: "base_link"
+    tf_ee_frame: "tool0"
+
+    # Data storage
+    data_dir: "data/"
