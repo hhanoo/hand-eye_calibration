@@ -492,16 +492,21 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.result_text.setText(f"Loaded {len(robot_T_list)} poses from: {filepath}")
 
     def closeEvent(self, event):
+        self.ros_timer.stop()
+        self.display_timer.stop()
         if self.pose_reader is not None:
             self.pose_reader.disconnect()
         event.accept()
+        QtWidgets.QApplication.quit()
 
 
 def main(args=None):
+    # QApplication must be created before rclpy.init to avoid signal handler conflicts
+    app = QtWidgets.QApplication(sys.argv)
+
     rclpy.init(args=args)
     node = CalibrationNode()
 
-    app = QtWidgets.QApplication(sys.argv)
     gui = HandEyeCalibrationGUI(node)
     gui.show()
 

@@ -1,12 +1,13 @@
 """
 Launch file for hand-eye calibration.
 Starts realsense2_camera and the calibration GUI node.
+When GUI is closed, the entire launch shuts down.
 """
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
@@ -31,13 +32,14 @@ def generate_launch_description():
         }.items(),
     )
 
-    # Calibration GUI node
+    # Calibration GUI node — on_exit: shut down entire launch
     calibration_node = Node(
         package='hand_eye_calibration',
         executable='gui_node',
         name='hand_eye_calibration',
         parameters=[config_file],
         output='screen',
+        on_exit=Shutdown(),
     )
 
     return LaunchDescription([
