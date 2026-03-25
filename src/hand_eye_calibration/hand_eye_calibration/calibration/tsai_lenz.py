@@ -10,8 +10,9 @@ References:
     Tsai, Lenz. "A new technique for fully autonomous and efficient 3D
     robotics hand/eye calibration." IEEE TRA, 1989.
 """
+
 import numpy as np
-from numpy import dot, eye, zeros, outer
+from numpy import dot, eye, outer, zeros
 from numpy.linalg import inv
 
 
@@ -20,11 +21,11 @@ def _log_rotation(R):
     theta = np.arccos(np.clip((R[0, 0] + R[1, 1] + R[2, 2] - 1.0) / 2.0, -1.0, 1.0))
     if abs(theta) < 1e-10:
         return np.zeros(3)
-    return np.array([
-        R[2, 1] - R[1, 2],
-        R[0, 2] - R[2, 0],
-        R[1, 0] - R[0, 1]
-    ]) * theta / (2 * np.sin(theta))
+    return (
+        np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
+        * theta
+        / (2 * np.sin(theta))
+    )
 
 
 def _inv_sqrt(mat):
@@ -83,8 +84,8 @@ def solve_tsai_lenz(robot_T_list, marker_T_list):
     for i in range(N):
         Ra, ta = A_list[i][0:3, 0:3], A_list[i][0:3, 3]
         _Rb, tb = B_list[i][0:3, 0:3], B_list[i][0:3, 3]
-        C[3 * i:3 * i + 3, :] = eye(3) - Ra
-        d[3 * i:3 * i + 3, 0] = ta - dot(Rx, tb)
+        C[3 * i : 3 * i + 3, :] = eye(3) - Ra
+        d[3 * i : 3 * i + 3, 0] = ta - dot(Rx, tb)
 
     tx = dot(inv(dot(C.T, C)), dot(C.T, d)).flatten()
 

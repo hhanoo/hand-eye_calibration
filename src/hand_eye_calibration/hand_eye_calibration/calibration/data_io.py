@@ -2,6 +2,7 @@
 Pose data I/O for hand-eye calibration.
 Saves/loads pose pairs and calibration results in CSV format.
 """
+
 import csv
 import os
 from datetime import datetime
@@ -24,15 +25,17 @@ def save_pose_pairs(filepath, robot_T_list, marker_T_list, metadata=None):
     """
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
-    with open(filepath, 'w', newline='') as f:
+    with open(filepath, "w", newline="") as f:
         writer = csv.writer(f)
 
         # Header
         meta = metadata or {}
-        meta.setdefault('date', datetime.now().isoformat())
-        meta.setdefault('num_samples', len(robot_T_list))
+        meta.setdefault("date", datetime.now().isoformat())
+        meta.setdefault("num_samples", len(robot_T_list))
         writer.writerow([f"# {k}={v}" for k, v in meta.items()])
-        writer.writerow(['# robot_T (16 floats, row-major)', 'marker_T (16 floats, row-major)'])
+        writer.writerow(
+            ["# robot_T (16 floats, row-major)", "marker_T (16 floats, row-major)"]
+        )
 
         # Data
         for robot_T, marker_T in zip(robot_T_list, marker_T_list):
@@ -50,11 +53,11 @@ def load_pose_pairs(filepath):
     robot_T_list = []
     marker_T_list = []
 
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         reader = csv.reader(f)
         for row in reader:
             # Skip comment/header lines
-            if not row or str(row[0]).startswith('#'):
+            if not row or str(row[0]).startswith("#"):
                 continue
 
             values = [float(v) for v in row]
@@ -82,7 +85,7 @@ def save_calibration_result(filepath, X, algorithm, rmse=None, num_inliers=None)
     """
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
-    with open(filepath, 'w') as f:
+    with open(filepath, "w") as f:
         f.write(f"# Hand-Eye Calibration Result\n")
         f.write(f"# Algorithm: {algorithm}\n")
         f.write(f"# Date: {datetime.now().isoformat()}\n")
@@ -92,4 +95,4 @@ def save_calibration_result(filepath, X, algorithm, rmse=None, num_inliers=None)
             f.write(f"# Inliers: {num_inliers}\n")
         f.write(f"# 4x4 Transform (camera to end-effector):\n")
         for row in X:
-            f.write(','.join(f'{v:.10f}' for v in row) + '\n')
+            f.write(",".join(f"{v:.10f}" for v in row) + "\n")

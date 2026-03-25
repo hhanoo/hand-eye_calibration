@@ -2,16 +2,23 @@
 ArUco marker detection module.
 Extracted from: hand_eye_cal_UR/f1_calibration_UR_2_using_pendant.py
 """
-import numpy as np
+
 import cv2
 import cv2.aruco as aruco
+import numpy as np
 
 
 class ArUcoDetector:
     """Robot-agnostic ArUco grid board detector."""
 
-    def __init__(self, marker_size=6, total_markers=250,
-                 grid_shape=(5, 7), marker_length=0.037, marker_separation=0.003):
+    def __init__(
+        self,
+        marker_size=6,
+        total_markers=250,
+        grid_shape=(5, 7),
+        marker_length=0.037,
+        marker_separation=0.003,
+    ):
         """
         Args:
             marker_size: ArUco dictionary size (e.g. 6 for 6x6)
@@ -20,11 +27,12 @@ class ArUcoDetector:
             marker_length: Physical marker length in meters
             marker_separation: Physical separation between markers in meters
         """
-        key = getattr(aruco, f'DICT_{marker_size}X{marker_size}_{total_markers}')
+        key = getattr(aruco, f"DICT_{marker_size}X{marker_size}_{total_markers}")
         self.aruco_dict = aruco.getPredefinedDictionary(key)
         self.aruco_param = aruco.DetectorParameters()
         self.board = aruco.GridBoard(
-            grid_shape, marker_length, marker_separation, self.aruco_dict)
+            grid_shape, marker_length, marker_separation, self.aruco_dict
+        )
         self.detector = aruco.ArucoDetector(self.aruco_dict, self.aruco_param)
 
     def detect(self, color_img, camera_matrix, dist_coeffs):
@@ -49,13 +57,15 @@ class ArUcoDetector:
             return False, color_img, None
 
         retval, rvec, tvec = aruco.estimatePoseBoard(
-            bboxs, ids, self.board, camera_matrix, dist_coeffs, None, None)
+            bboxs, ids, self.board, camera_matrix, dist_coeffs, None, None
+        )
 
         if retval == 0:
             return False, color_img, None
 
         annotated = cv2.drawFrameAxes(
-            color_img, camera_matrix, dist_coeffs, rvec, tvec, 0.053)
+            color_img, camera_matrix, dist_coeffs, rvec, tvec, 0.053
+        )
 
         Rotmat = np.zeros((3, 3))
         cv2.Rodrigues(rvec, Rotmat)

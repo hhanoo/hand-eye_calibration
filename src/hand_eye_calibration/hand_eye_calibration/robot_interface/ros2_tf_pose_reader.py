@@ -3,15 +3,20 @@ Robot pose reader using ROS2 TF2.
 Reads end-effector pose from /tf topic published by robot drivers
 (e.g. ur_robot_driver, doosan-robot2).
 """
+
 import numpy as np
-
-from .pose_reader_interface import PoseReader
-
 import rclpy
 from rclpy.duration import Duration
 from rclpy.time import Time
-from tf2_ros import Buffer, TransformListener
-from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
+from tf2_ros import (
+    Buffer,
+    ConnectivityException,
+    ExtrapolationException,
+    LookupException,
+    TransformListener,
+)
+
+from .pose_reader_interface import PoseReader
 
 
 def _transform_to_matrix(transform):
@@ -21,11 +26,13 @@ def _transform_to_matrix(transform):
 
     # Quaternion to rotation matrix (xyzw convention from geometry_msgs)
     x, y, z, w = r.x, r.y, r.z, r.w
-    R = np.array([
-        [1 - 2*(y*y + z*z), 2*(x*y - z*w),     2*(x*z + y*w)],
-        [2*(x*y + z*w),     1 - 2*(x*x + z*z), 2*(y*z - x*w)],
-        [2*(x*z - y*w),     2*(y*z + x*w),     1 - 2*(x*x + y*y)],
-    ])
+    R = np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )
 
     T = np.eye(4)
     T[0:3, 0:3] = R
@@ -56,18 +63,16 @@ class ROS2TFPoseReader(PoseReader):
         """Check if TF frames are available (5 second timeout)."""
         try:
             self.tf_buffer.lookup_transform(
-                self.base_frame, self.ee_frame,
-                Time(),
-                timeout=Duration(seconds=5.0))
+                self.base_frame, self.ee_frame, Time(), timeout=Duration(seconds=5.0)
+            )
             return True
         except (LookupException, ConnectivityException, ExtrapolationException):
             return False
 
     def get_pose(self) -> np.ndarray:
         transform = self.tf_buffer.lookup_transform(
-            self.base_frame, self.ee_frame,
-            Time(),
-            timeout=Duration(seconds=1.0))
+            self.base_frame, self.ee_frame, Time(), timeout=Duration(seconds=1.0)
+        )
         return _transform_to_matrix(transform)
 
     def disconnect(self):

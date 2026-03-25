@@ -5,10 +5,10 @@ hand_eye_calibration:
     camera_info_topic: "/camera/camera/color/camera_info"
 
     # ArUco marker settings
-    marker_dict: 10  # cv2.aruco.DICT_6X6_250
+    marker_dict: 10 # cv2.aruco.DICT_6X6_250
     board_grid_shape: [5, 7]
-    marker_length: 0.037  # meters
-    marker_separation: 0.003  # meters
+    marker_length: 0.037 # meters
+    marker_separation: 0.003 # meters
 
     # Robot pose acquisition mode: "ur_direct" or "ros2_tf"
     robot_mode: "ur_direct"

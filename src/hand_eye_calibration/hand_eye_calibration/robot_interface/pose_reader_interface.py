@@ -2,6 +2,7 @@
 Abstract base class for robot pose readers.
 All robot pose acquisition methods must implement this interface.
 """
+
 from abc import ABC, abstractmethod
 
 import numpy as np
