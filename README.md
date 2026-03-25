@@ -2,10 +2,10 @@
 
 **Multi-robot hand-eye calibration system with PyQt5 GUI**
 
-[![ROS2](https://img.shields.io/badge/ROS2-Humble-blue)](https://docs.ros.org/en/humble/)
-[![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-orange)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Supported-brightgreen)](docker/)
+[![ROS2](https://img.shields.io/badge/ROS2-Humble-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/humble/)
+[![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-BSD--3--Clause-orange?logo=opensourceinitiative&logoColor=white)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)](docker/)
 
 ## 목차
 
@@ -38,20 +38,20 @@
 - **gui_node**: ROS2 노드 + PyQt5 GUI — 카메라 영상 표시, 포즈 수집, 캘리브레이션 실행 (Python)
 - **realsense2_camera**: Intel RealSense 카메라 ROS2 드라이버 (C++, VCS로 가져옴)
 - **calibration**: ArUco 마커 검출, Tsai-Lenz / DQ RANSAC 솔버 모듈 (Python)
-- **robot_interface**: KETIRobotSDK 또는 ROS2 TF를 통한 로봇 포즈 획득 (Python)
+- **robot_interface**: UR Direct (read-only 소켓) 또는 ROS2 TF를 통한 로봇 포즈 획득 (Python)
 
 ### 적용 가능 영역
 
 - Eye-in-hand 로봇 캘리브레이션 (카메라가 엔드이펙터에 부착된 경우)
 - 산업 자동화 시스템의 로봇-카메라 정밀 정합
-- 다중 로봇 환경 (UR, Doosan, Rainbow Robotics, Neuromeka 등)
+- 다중 로봇 환경 (UR, Doosan 등)
 - 연구 개발 및 교육
 
 ---
 
 ## 주요 기능
 
-- **다중 로봇 지원** — KETIRobotSDK (UR10, M1013, RB10, Indy7) 또는 ROS2 TF를 통해 어떤 로봇이든 사용 가능
+- **다중 로봇 지원** — UR Direct (read-only 소켓) 또는 ROS2 TF를 통해 펜던트 제어를 유지하며 포즈 획득
 - **2가지 캘리브레이션 알고리즘** — DQ RANSAC (이상치에 강건), Tsai-Lenz (빠른 결과 확인)
 - **PyQt5 GUI** — 카메라 영상 실시간 표시, ArUco 마커 오버레이, 포즈 수집/삭제, 캘리브레이션 실행을 한 화면에서 처리
 - **ROS2 네이티브** — RealSense 카메라는 ROS2 토픽으로 수신, TF2로 로봇 포즈 획득 가능
@@ -80,8 +80,8 @@
     │                                          │
     │  ┌─────────────┐  ┌───────────────────┐  │
     │  │ ArUco       │  │  Robot Interface  │  │
-    │  │ Detector    │  │  (KETIRobotSDK    │  │
-    │  │             │  │   or ROS2 TF)     │  │
+    │  │ Detector    │  │  (UR Direct /     │  │
+    │  │             │  │   ROS2 TF)        │  │
     │  └──────┬──────┘  └───────┬───────────┘  │
     │         │                 │              │
     │         ▼                 ▼              │
@@ -107,51 +107,51 @@
 ## 프로젝트 구조
 
 ```
-Hand-eye_calibration/                         # ROS2 워크스페이스 루트
-├── realsense.repos                           # VCS: realsense-ros v4.55.1
+Hand-eye_calibration/                           # ROS2 워크스페이스 루트
+├── .github/workflows/
+│   └── release.yml                             # 태그 push 시 GitHub Release 자동 생성
+├── realsense.repos                             # VCS: realsense-ros v4.55.1
 ├── README.md
 ├── docker/
-│   ├── Dockerfile                            # ROS2 Humble + 의존성
-│   ├── build.sh                              # Docker 이미지 빌드
-│   ├── run.sh                                # Docker 컨테이너 실행
-│   └── entrypoint.sh                         # ROS2 환경 설정 + alias
+│   ├── Dockerfile                              # ROS2 Humble + 의존성
+│   ├── config.sh.example                       # Docker 공통 설정 (이미지명, ROS_DOMAIN_ID)
+│   ├── build.sh                                # Docker 이미지 빌드
+│   ├── run.sh                                  # Docker 컨테이너 실행
+│   └── entrypoint.sh                           # ROS2 환경 설정 + alias
 │
 └── src/
-    ├── realsense-ros/                        # VCS로 가져온 RealSense ROS2 드라이버
+    ├── realsense-ros/                          # VCS로 가져온 RealSense ROS2 드라이버
     │
-    └── hand_eye_calibration/                 # 캘리브레이션 패키지
+    └── hand_eye_calibration/                   # 캘리브레이션 패키지 (Python)
         ├── package.xml
         ├── setup.py
         ├── config/
-        │   └── default.yaml                  # ROS2 파라미터 (토픽, 마커, 로봇 설정)
+        │   └── default.yaml                    # ROS2 파라미터 (토픽, 마커, 로봇 설정)
         ├── launch/
-        │   └── calibration.launch.py         # RealSense + GUI 동시 실행
+        │   └── calibration.launch.py           # RealSense + GUI 동시 실행
         │
-        └── hand_eye_calibration/             # Python 패키지
-            ├── gui_node.py                   # 메인 ROS2 노드 + PyQt5 GUI
+        └── hand_eye_calibration/               # Python 패키지
+            ├── gui_node.py                     # 메인 ROS2 노드 + PyQt5 GUI
             │
-            ├── calibration/                  # 캘리브레이션 알고리즘
-            │   ├── aruco_detector.py          # ArUco 마커 검출
-            │   ├── tsai_lenz.py               # Tsai-Lenz 솔버
+            ├── calibration/                    # 캘리브레이션 알고리즘
+            │   ├── aruco_detector.py           # ArUco 마커 검출
+            │   ├── tsai_lenz.py                # Tsai-Lenz 솔버
             │   ├── dual_quaternion_ransac.py   # DQ RANSAC 래퍼
-            │   └── data_io.py                 # 포즈 데이터 CSV 저장/로드
+            │   └── data_io.py                  # 포즈 데이터 CSV 저장/로드
             │
-            ├── robot_interface/              # 로봇 포즈 획득
-            │   ├── pose_reader_interface.py   # PoseReader ABC
-            │   ├── keti_sdk_pose_reader.py    # KETIRobotSDK 방식
-            │   └── ros2_tf_pose_reader.py     # ROS2 TF 방식
+            ├── robot_interface/                # 로봇 포즈 획득
+            │   ├── pose_reader_interface.py    # PoseReader ABC
+            │   ├── ur_direct_pose_reader.py    # UR read-only 소켓 (포트 30003)
+            │   └── ros2_tf_pose_reader.py      # ROS2 TF 방식
             │
-            ├── hand_eye_calibration_lib/     # ethz-asl DQ 라이브러리 (추출)
+            ├── hand_eye_calibration_lib/       # ethz-asl DQ 라이브러리 (추출)
             │   ├── dual_quaternion.py
             │   ├── quaternion.py
             │   └── dual_quaternion_hand_eye_calibration.py
             │
-            ├── handeye_4dof_lib/             # 4-DOF 솔버 (추출)
-            │   ├── calibrator.py
-            │   └── pose_selector.py
-            │
-            └── module/                       # 기존 모듈
-                └── KETIRobotSDK/              # 로봇 통합 SDK
+            └── handeye_4dof_lib/               # 4-DOF 솔버 (추출)
+                ├── calibrator.py
+                └── pose_selector.py
 ```
 
 ---
@@ -287,9 +287,9 @@ ros2 run hand_eye_calibration gui_node
 
 ```bash
 # 컨테이너 내부에서
-camera          # RealSense 카메라만 실행
-calibrate       # GUI만 실행
-calibrate_launch  # 카메라 + GUI 동시 실행
+camera    # RealSense 카메라만 실행
+gui       # GUI만 실행
+launch    # 카메라 + GUI 동시 실행
 ```
 
 ---
@@ -300,9 +300,9 @@ calibrate_launch  # 카메라 + GUI 동시 실행
 
 GUI 상단에서:
 
-- **로봇 모드** 선택: `KETIRobotSDK` 또는 `ROS2 TF`
-- KETIRobotSDK: 로봇 타입(UR10, M1013 등) 선택 → IP/Port 자동 채움 → **Connect**
-- ROS2 TF: Base Frame / EE Frame 입력 → **Connect**
+- **로봇 모드** 선택: `UR Direct` 또는 `ROS2 TF`
+- UR Direct: IP/Port 입력 → **Connect** (read-only 소켓, 펜던트 제어 유지)
+- ROS2 TF: Base Frame / EE Frame 입력 → **Connect** (로봇 드라이버가 TF를 퍼블리시해야 함)
 
 ### 2. 데이터 수집
 
@@ -344,10 +344,7 @@ hand_eye_calibration:
     marker_separation: 0.003 # 마커 간격 (m)
 
     # 로봇 설정
-    robot_mode: "keti_sdk" # "keti_sdk" 또는 "ros2_tf"
-    keti_robot_type: 2 # 0=TestDummy, 1=RB10, 2=UR10, 3=M1013, 4=Indy7
-    keti_robot_ip: "192.168.1.77"
-    keti_robot_port: 30003
+    robot_mode: "ur_direct" # "ur_direct" 또는 "ros2_tf"
 
     # ROS2 TF 설정
     tf_base_frame: "base_link"
@@ -359,13 +356,12 @@ hand_eye_calibration:
 
 ### 주요 파라미터 설명
 
-| 파라미터            | 타입   | 기본값     | 설명                                                  |
-| ------------------- | ------ | ---------- | ----------------------------------------------------- |
-| `marker_length`     | float  | 0.037      | ArUco 마커 한 변의 실제 크기 (m) — 정확도에 매우 중요 |
-| `marker_separation` | float  | 0.003      | 그리드 보드에서 마커 간 간격 (m)                      |
-| `board_grid_shape`  | list   | [5, 7]     | 그리드 보드의 (열, 행) 수                             |
-| `robot_mode`        | string | "keti_sdk" | 로봇 포즈 획득 방식                                   |
-| `keti_robot_type`   | int    | 2          | KETIRobotSDK 로봇 타입 상수                           |
+| 파라미터            | 타입   | 기본값      | 설명                                                  |
+| ------------------- | ------ | ----------- | ----------------------------------------------------- |
+| `marker_length`     | float  | 0.037       | ArUco 마커 한 변의 실제 크기 (m) — 정확도에 매우 중요 |
+| `marker_separation` | float  | 0.003       | 그리드 보드에서 마커 간 간격 (m)                      |
+| `board_grid_shape`  | list   | [5, 7]      | 그리드 보드의 (열, 행) 수                             |
+| `robot_mode`        | string | "ur_direct" | 로봇 포즈 획득 방식 ("ur_direct" / "ros2_tf")         |
 
 ---
 
@@ -446,14 +442,6 @@ sudo usermod -aG plugdev $USER
 pip3 install 'numpy>=1.21.0,<2.0'
 ```
 
-### 5. colcon build 경고: package index marker
-
-```
-WARNING: Package doesn't explicitly install a marker in the package index
-```
-
-무시해도 됩니다. 향후 colcon-ros 업데이트에서 해결 예정.
-
 ---
 
 ## 외부 라이브러리 출처
@@ -468,7 +456,7 @@ WARNING: Package doesn't explicitly install a marker in the package index
 
 ## 라이선스
 
-이 프로젝트는 MIT 라이선스로 배포됩니다.
+이 프로젝트는 BSD-3-Clause 라이선스로 배포됩니다.
 
 ---
 
