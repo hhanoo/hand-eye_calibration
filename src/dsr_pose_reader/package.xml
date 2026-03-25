@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>dsr_pose_reader</name>
+  <version>0.1.0</version>
+  <description>
+    Read-only monitor for Doosan robot TCP pose via DRFL library.
+    Connects without requesting access control, so pendant operation is preserved.
+  </description>
+  <maintainer email="woo980711@gmail.com">hhanoo</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <!-- Build tool dependency (빌드 도구) -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Core ROS2 dependencies (핵심 ROS2 의존성) -->
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+
+  <!-- TF2 dependencies (좌표 변환) -->
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+
+  <!-- NOTE: Doosan DRFL library is vendored in doosan_api/ (시스템 의존성 아님) -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -39,6 +39,7 @@
 - **realsense2_camera**: Intel RealSense 카메라 ROS2 드라이버 (C++, VCS로 가져옴)
 - **calibration**: ArUco 마커 검출, Tsai-Lenz / DQ RANSAC 솔버 모듈 (Python)
 - **robot_interface**: UR Direct (read-only 소켓) 또는 ROS2 TF를 통한 로봇 포즈 획득 (Python)
+- **dsr_pose_reader**: Doosan 로봇 전용 포즈 리더 — DRFL 모니터링으로 펜던트 제어 유지 (C++)
 
 ### 적용 가능 영역
 
@@ -51,7 +52,7 @@
 
 ## 주요 기능
 
-- **다중 로봇 지원** — UR Direct (read-only 소켓) 또는 ROS2 TF를 통해 펜던트 제어를 유지하며 포즈 획득
+- **다중 로봇 지원** — UR Direct (read-only 소켓), Doosan DRFL (모니터링), ROS2 TF를 통해 펜던트 제어를 유지하며 포즈 획득
 - **2가지 캘리브레이션 알고리즘** — DQ RANSAC (이상치에 강건), Tsai-Lenz (빠른 결과 확인)
 - **PyQt5 GUI** — 카메라 영상 실시간 표시, ArUco 마커 오버레이, 포즈 수집/삭제, 캘리브레이션 실행을 한 화면에서 처리
 - **ROS2 네이티브** — RealSense 카메라는 ROS2 토픽으로 수신, TF2로 로봇 포즈 획득 가능
@@ -63,43 +64,39 @@
 ## 시스템 구조
 
 ```
-    Intel RealSense D415/D435
-              │
-              │ USB 3.0
-              ▼
-    ┌──────────────────────┐
-    │ realsense2_camera    │  (ROS2 패키지, VCS로 가져옴)
-    │ - Color streaming    │
-    │ - Camera info pub    │
-    └──────────┬───────────┘
-               │ /camera/color/image_raw
-               │ /camera/color/camera_info
-               ▼
-    ┌──────────────────────────────────────────┐
-    │ hand_eye_calibration (gui_node)          │
-    │                                          │
-    │  ┌─────────────┐  ┌───────────────────┐  │
-    │  │ ArUco       │  │  Robot Interface  │  │
-    │  │ Detector    │  │  (UR Direct /     │  │
-    │  │             │  │   ROS2 TF)        │  │
-    │  └──────┬──────┘  └───────┬───────────┘  │
-    │         │                 │              │
-    │         ▼                 ▼              │
-    │  ┌────────────────────────────────┐      │
-    │  │ Capture Pose                   │      │
-    │  │ (marker T + robot T 저장)       │      │
-    │  └──────────┬─────────────────────┘      │
-    │             │                            │
-    │             ▼                            │
-    │  ┌────────────────────────────────┐      │
-    │  │ Calibration Solver             │      │
-    │  │ - DQ RANSAC (기본)              │      │
-    │  │ - Tsai-Lenz                    │      │
-    │  └──────────┬─────────────────────┘      │
-    │             │                            │
-    │             ▼                            │
-    │  Result: X (4x4, camera ↔ end-effector)  │
-    └──────────────────────────────────────────┘
+    Intel RealSense D415/D435             UR Robot          Doosan Robot
+              │                              │                   │
+              │ USB 3.0                      │ TCP:30003         │ TCP:1234
+              ▼                              │ (read-only)       │ (DRFL monitoring)
+    ┌──────────────────────┐                 │                   │
+    │ realsense2_camera    │                 │     ┌─────────────────────────┐
+    │ - Color streaming    │                 │     │ dsr_pose_reader (C++)   │
+    │ - Camera info pub    │                 │     │ - No access control     │
+    └──────────┬───────────┘                 │     │ - Pendant preserved     │
+               │ /camera/color/image_raw     │     └────────────┬────────────┘
+               │ /camera/color/camera_info   │                  │ /tf, /tcp_pose
+               ▼                             ▼                  ▼
+    ┌──────────────────────────────────────────────────────────────┐
+    │ hand_eye_calibration (gui_node)                              │
+    │                                                              │
+    │  ┌─────────────┐  ┌──────────────────────────────────────┐   │
+    │  │ ArUco       │  │  Robot Interface                     │   │
+    │  │ Detector    │  │  - UR Direct (read-only socket)      │   │
+    │  │             │  │  - ROS2 TF (dsr_pose_reader, etc.)   │   │
+    │  └──────┬──────┘  └──────────────────┬───────────────────┘   │
+    │         │                            │                       │
+    │         ▼                            ▼                       │
+    │  ┌────────────────────────────────────────┐                  │
+    │  │ Capture Pose (marker T + robot T 저장)  │                  │
+    │  └──────────────────┬─────────────────────┘                  │
+    │                     ▼                                        │
+    │  ┌────────────────────────────────────────┐                  │
+    │  │ Calibration Solver                     │                  │
+    │  │ - DQ RANSAC (기본)  - Tsai-Lenz         │                  │
+    │  └──────────────────┬─────────────────────┘                  │
+    │                     ▼                                        │
+    │  Result: X (4x4, camera ↔ end-effector)                      │
+    └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -121,6 +118,19 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 │
 └── src/
     ├── realsense-ros/                          # VCS로 가져온 RealSense ROS2 드라이버
+    │
+    ├── dsr_pose_reader/                        # Doosan 로봇 포즈 리더 (C++)
+    │   ├── package.xml
+    │   ├── CMakeLists.txt
+    │   ├── doosan_api/                         # DRFL 라이브러리 (Doosan Robotics, BSD)
+    │   │   ├── include/                        # DRFL.h, DRFC.h, DRFLEx.h, DRFS.h
+    │   │   └── lib/                            # libDRFL.a, libPoco*.so
+    │   ├── include/dsr_pose_reader/
+    │   │   └── pose_reader_node.hpp
+    │   ├── launch/
+    │   │   └── dsr_pose_reader.launch.py
+    │   └── src/
+    │       └── pose_reader_node.cpp
     │
     └── hand_eye_calibration/                   # 캘리브레이션 패키지 (Python)
         ├── package.xml
@@ -203,10 +213,10 @@ ros2 launch hand_eye_calibration calibration.launch.py
 
 ### 필수
 
-- **OS**: Ubuntu 22.04 LTS
-- **ROS2**: Humble Hawksbill
-- **Python**: 3.10+
-- **Camera**: Intel RealSense D435 or D455 (USB 3.0)
+- **OS**: Ubuntu 22.04
+- **ROS2**: Humble
+- **Python**: 3.10
+- **Camera**: Intel RealSense D415, D435, D455 (USB 3.0)
 
 ### 소프트웨어 의존성
 
@@ -271,26 +281,48 @@ source install/setup.bash
 
 ## 실행
 
-### Launch (카메라 + GUI 동시 실행)
+### UR 로봇 (UR Direct 모드)
+
+GUI에서 UR Direct 모드로 직접 연결하므로 별도 드라이버가 필요 없습니다.
 
 ```bash
+# 카메라 + GUI 동시 실행
 ros2 launch hand_eye_calibration calibration.launch.py
-```
 
-### GUI만 실행 (카메라를 별도로 실행한 경우)
-
-```bash
+# 또는 카메라와 GUI를 따로 실행
+ros2 launch realsense2_camera rs_launch.py \
+  depth_module.depth_profile:=1280x720x30 \
+  rgb_camera.color_profile:=1280x720x30 \
+  align_depth.enable:=true
 ros2 run hand_eye_calibration gui_node
 ```
 
-### Docker alias
+### Doosan 로봇 (dsr_pose_reader + ROS2 TF 모드)
+
+dsr_pose_reader를 먼저 실행하고, GUI에서 ROS2 TF 모드로 연결합니다.
 
 ```bash
-# 컨테이너 내부에서
-camera    # RealSense 카메라만 실행
-gui       # GUI만 실행
-launch    # 카메라 + GUI 동시 실행
+# 터미널 1: Doosan 포즈 리더 (config/default.yaml 설정 사용)
+ros2 launch dsr_pose_reader dsr_pose_reader.launch.py
+
+# 커스텀 yaml 지정
+ros2 launch dsr_pose_reader dsr_pose_reader.launch.py config_file:=/path/to/custom.yaml
+
+# 개별 파라미터 오버라이드
+ros2 launch dsr_pose_reader dsr_pose_reader.launch.py -p robot_ip:=192.168.1.100
+
+# 터미널 2: 카메라 + GUI
+ros2 launch hand_eye_calibration calibration.launch.py
 ```
+
+### Docker alias (컨테이너 내부)
+
+| alias    | 명령어                                                   | 설명                    |
+| -------- | -------------------------------------------------------- | ----------------------- |
+| `camera` | `ros2 launch realsense2_camera rs_launch.py ...`         | RealSense 카메라만 실행 |
+| `gui`    | `ros2 run hand_eye_calibration gui_node`                 | GUI만 실행              |
+| `launch` | `ros2 launch hand_eye_calibration calibration.launch.py` | 카메라 + GUI 동시 실행  |
+| `doosan` | `ros2 launch dsr_pose_reader dsr_pose_reader.launch.py`  | Doosan 포즈 리더 실행   |
 
 ---
 
@@ -302,7 +334,7 @@ GUI 상단에서:
 
 - **로봇 모드** 선택: `UR Direct` 또는 `ROS2 TF`
 - UR Direct: IP/Port 입력 → **Connect** (read-only 소켓, 펜던트 제어 유지)
-- ROS2 TF: Base Frame / EE Frame 입력 → **Connect** (로봇 드라이버가 TF를 퍼블리시해야 함)
+- ROS2 TF: Base Frame / EE Frame 입력 → **Connect** (dsr_pose_reader 등 TF 퍼블리시 노드 필요)
 
 ### 2. 데이터 수집
 
@@ -354,6 +386,24 @@ hand_eye_calibration:
     data_dir: "data/"
 ```
 
+### dsr_pose_reader/config/default.yaml
+
+```yaml
+dsr_pose_reader:
+  ros__parameters:
+    # Doosan controller connection
+    robot_ip: "192.168.137.100"
+    robot_port: 12345
+
+    # TF frame names
+    base_frame: "base_link"
+    ee_frame: "tool0"
+
+    # Publishing settings
+    publish_rate: 30.0 # Hz
+    publish_tf: true
+```
+
 ### 주요 파라미터 설명
 
 | 파라미터            | 타입   | 기본값      | 설명                                                  |
@@ -374,9 +424,27 @@ hand_eye_calibration:
 | `/camera/camera/color/image_raw`   | `sensor_msgs/Image`      | RGB 카메라 이미지    |
 | `/camera/camera/color/camera_info` | `sensor_msgs/CameraInfo` | 카메라 내부 파라미터 |
 
+### Published Topics (dsr_pose_reader)
+
+| Topic      | Type                        | Description                   |
+| ---------- | --------------------------- | ----------------------------- |
+| `tcp_pose` | `geometry_msgs/PoseStamped` | Doosan TCP 포즈 (base 기준)   |
+| `/tf`      | `tf2_msgs/TFMessage`        | base_link → tool0 변환 (옵션) |
+
 ### Parameters
 
 모든 파라미터는 `config/default.yaml` 또는 launch 인수로 설정 가능합니다.
+
+**dsr_pose_reader 파라미터:**
+
+| 파라미터       | 타입   | 기본값            | 설명                   |
+| -------------- | ------ | ----------------- | ---------------------- |
+| `robot_ip`     | string | "192.168.137.100" | Doosan 컨트롤러 IP     |
+| `robot_port`   | int    | 12345             | Doosan 컨트롤러 포트   |
+| `base_frame`   | string | "base_link"       | TF base frame          |
+| `ee_frame`     | string | "tool0"           | TF end-effector frame  |
+| `publish_rate` | double | 30.0              | 퍼블리시 주기 (Hz)     |
+| `publish_tf`   | bool   | true              | TF 브로드캐스트 활성화 |
 
 ---
 
@@ -451,12 +519,13 @@ pip3 install 'numpy>=1.21.0,<2.0'
 | hand_eye_calibration | https://github.com/ethz-asl/hand_eye_calibration       | DQ RANSAC 솔버          |
 | handeye-4dof         | https://github.com/QuantuMope/handeye-4dof             | 4-DOF 캘리브레이션      |
 | realsense-ros        | https://github.com/realsenseai/realsense-ros (v4.55.1) | RealSense ROS2 드라이버 |
+| DRFL                 | https://robotlab.doosanrobotics.com/ko/Index           | Doosan 로봇 모니터링    |
 
 ---
 
 ## 라이선스
 
-이 프로젝트는 BSD-3-Clause 라이선스로 배포됩니다.
+이 프로젝트는 BSD-3-Clause 라이선스로 배포됩니다. - 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
 ---
 

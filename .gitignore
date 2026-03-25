@@ -1,5 +1,16 @@
 # IDEs
+.idea/
 .vscode/
+.cache/
+
+# Claude
+.claude/
+
+# C++
+build/
+.clang-format
+.clangd
+*.pro.user
 
 # Python
 __pycache__/
@@ -10,6 +21,11 @@ __pycache__/
 # Virtual environment
 .venv/
 venv/
+
+# Environment
+.env
+*.env
+config.ini
 
 # System
 .DS_Store

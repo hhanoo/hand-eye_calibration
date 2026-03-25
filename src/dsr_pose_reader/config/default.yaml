@@ -1,0 +1,13 @@
+dsr_pose_reader:
+  ros__parameters:
+    # Doosan controller connection
+    robot_ip: "192.168.137.100"
+    robot_port: 12345
+
+    # TF frame names
+    base_frame: "base_link"
+    ee_frame: "tool0"
+
+    # Publishing settings
+    publish_rate: 30.0  # Hz
+    publish_tf: true
