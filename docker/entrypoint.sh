@@ -16,8 +16,8 @@ cat > "$ALIAS_FILE" << 'ALIASEOF'
 [ -f /opt/ros/humble/setup.bash ] && source /opt/ros/humble/setup.bash
 [ -f /ros2_ws/install/setup.bash ] && source /ros2_ws/install/setup.bash
 alias camera='ros2 launch realsense2_camera rs_launch.py depth_module.depth_profile:=1280x720x30 rgb_camera.color_profile:=1280x720x30 align_depth.enable:=true'
-alias calibrate='ros2 run hand_eye_calibration gui_node'
-alias calibrate_launch='ros2 launch hand_eye_calibration calibration.launch.py'
+alias gui='ros2 run hand_eye_calibration gui_node'
+alias launch='ros2 launch hand_eye_calibration calibration.launch.py'
 ALIASEOF
 
 # Ensure root's .bashrc sources the alias file (once)

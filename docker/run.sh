@@ -4,11 +4,11 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROS2_WS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Set image name
-IMAGE_NAME="hand_eye_calibration_ros2:latest"
-
-# Set container name
-CONTAINER_NAME="hand_eye_calibration_ros2"
+# Load common variables (auto-copy from example if not exists)
+if [ ! -f "$SCRIPT_DIR/config.sh" ]; then
+    cp "$SCRIPT_DIR/config.sh.example" "$SCRIPT_DIR/config.sh"
+fi
+source "$SCRIPT_DIR/config.sh"
 
 # Check if the image exists
 if ! docker image inspect $IMAGE_NAME > /dev/null 2>&1; then
@@ -27,7 +27,7 @@ docker run -it --rm \
     --privileged \
     --network host \
     --ipc=host \
-    -e ROS_DOMAIN_ID=98 \
+    -e ROS_DOMAIN_ID=$ROS_DOMAIN_ID \
     -e DISPLAY=$DISPLAY \
     -e QT_X11_NO_MITSHM=1 \
     -v /dev:/dev \

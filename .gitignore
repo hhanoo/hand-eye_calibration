@@ -1,11 +1,31 @@
+# IDEs
 .vscode/
-.venv/
 
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
 
-# colcon build outputs
+# Virtual environment
+.venv/
+venv/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.*.backup
+*_backup.txt
+
+# ROS2
 build/
 install/
 log/
 
+# Docker
+docker/config.sh
+
+# KETIRobotSDK
 module/ketirobotsdk/

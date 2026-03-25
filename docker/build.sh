@@ -3,8 +3,11 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Set image name
-IMAGE_NAME="hand_eye_calibration_ros2:latest"
+# Load common variables (auto-copy from example if not exists)
+if [ ! -f "$SCRIPT_DIR/config.sh" ]; then
+    cp "$SCRIPT_DIR/config.sh.example" "$SCRIPT_DIR/config.sh"
+fi
+source "$SCRIPT_DIR/config.sh"
 
 # Build the Docker image
 echo "Building Docker image: $IMAGE_NAME..."

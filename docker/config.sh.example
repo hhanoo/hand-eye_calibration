@@ -1,0 +1,8 @@
+# Docker image name (used in build.sh and run.sh)
+IMAGE_NAME="hand-eye-calibration-humble"
+
+# Docker container name (used in run.sh)
+CONTAINER_NAME="hand-eye-calibration-humble"
+
+# ROS 2 domain ID for network isolation (used in run.sh)
+ROS_DOMAIN_ID=98
