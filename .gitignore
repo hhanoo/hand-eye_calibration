@@ -27,5 +27,5 @@ log/
 # Docker
 docker/config.sh
 
-# KETIRobotSDK
-module/ketirobotsdk/
+# Data files
+data/

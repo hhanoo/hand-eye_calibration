@@ -13,14 +13,13 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (os.path.join("share", package_name, "config"), glob("config/*.yaml")),
         (os.path.join("share", package_name, "launch"), glob("launch/*.launch.py")),
-        (os.path.join("share", package_name, "resource"), glob("resource/*")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
     maintainer="hhanoo",
     maintainer_email="woo980711@gmail.com",
     description="Multi-robot hand-eye calibration tool with PyQt5 GUI",
-    license="MIT",
+    license="BSD-3-Clause",
     entry_points={
         "console_scripts": [
             "gui_node = hand_eye_calibration.gui_node:main",

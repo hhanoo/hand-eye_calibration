@@ -5,15 +5,23 @@
   <version>0.1.0</version>
   <description>Multi-robot hand-eye calibration tool with PyQt5 GUI</description>
   <maintainer email="woo980711@gmail.com">hhanoo</maintainer>
-  <license>MIT</license>
+  <license>BSD-3-Clause</license>
 
+  <!-- Build tool dependency (빌드 도구) -->
   <buildtool_depend>ament_python</buildtool_depend>
 
+  <!-- Core ROS2 dependencies (핵심 ROS2 의존성) -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+
+  <!-- Image processing dependencies (이미지 처리) -->
   <exec_depend>cv_bridge</exec_depend>
+
+  <!-- TF2 dependencies (좌표 변환) -->
   <exec_depend>tf2_ros</exec_depend>
+
+  <!-- Python dependencies (Python 라이브러리) -->
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
 

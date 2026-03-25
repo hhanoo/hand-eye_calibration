@@ -27,8 +27,7 @@ from .calibration import (
     solve_dq_ransac,
     solve_tsai_lenz,
 )
-from .robot_interface import KETISDKPoseReader, ROS2TFPoseReader, URDirectPoseReader
-from .robot_interface.keti_sdk_pose_reader import ROBOT_TYPES
+from .robot_interface import ROS2TFPoseReader, URDirectPoseReader
 
 
 class CalibrationNode(Node):
@@ -44,10 +43,7 @@ class CalibrationNode(Node):
         self.declare_parameter("board_grid_shape", [5, 7])
         self.declare_parameter("marker_length", 0.037)
         self.declare_parameter("marker_separation", 0.003)
-        self.declare_parameter("robot_mode", "keti_sdk")
-        self.declare_parameter("keti_robot_type", 2)
-        self.declare_parameter("keti_robot_ip", "192.168.1.77")
-        self.declare_parameter("keti_robot_port", 30003)
+        self.declare_parameter("robot_mode", "ur_direct")
         self.declare_parameter("tf_base_frame", "base_link")
         self.declare_parameter("tf_ee_frame", "tool0")
         self.declare_parameter("data_dir", "data/")
@@ -115,37 +111,9 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         # Robot mode
         robot_layout.addWidget(QtWidgets.QLabel("Mode:"))
         self.combo_mode = QtWidgets.QComboBox()
-        self.combo_mode.addItems(["KETIRobotSDK", "UR Direct", "ROS2 TF"])
+        self.combo_mode.addItems(["UR Direct", "ROS2 TF"])
         self.combo_mode.currentIndexChanged.connect(self._on_mode_changed)
         robot_layout.addWidget(self.combo_mode)
-
-        # KETI SDK widgets
-        self.keti_widgets = QtWidgets.QWidget()
-        keti_layout = QtWidgets.QHBoxLayout(self.keti_widgets)
-        keti_layout.setContentsMargins(0, 0, 0, 0)
-
-        keti_layout.addWidget(QtWidgets.QLabel("Robot:"))
-        self.combo_robot = QtWidgets.QComboBox()
-        self.combo_robot.addItems(list(ROBOT_TYPES.keys()))
-        self.combo_robot.setCurrentText("UR10")
-        self.combo_robot.currentTextChanged.connect(self._on_robot_changed)
-        keti_layout.addWidget(self.combo_robot)
-
-        keti_layout.addWidget(QtWidgets.QLabel("IP:"))
-        self.edit_ip = QtWidgets.QLineEdit(
-            self.node.get_parameter("keti_robot_ip").value
-        )
-        self.edit_ip.setFixedWidth(130)
-        keti_layout.addWidget(self.edit_ip)
-
-        keti_layout.addWidget(QtWidgets.QLabel("Port:"))
-        self.edit_port = QtWidgets.QLineEdit(
-            str(self.node.get_parameter("keti_robot_port").value)
-        )
-        self.edit_port.setFixedWidth(60)
-        keti_layout.addWidget(self.edit_port)
-
-        robot_layout.addWidget(self.keti_widgets)
 
         # UR Direct widgets (single read-only socket, pendant-friendly)
         self.ur_direct_widgets = QtWidgets.QWidget()
@@ -290,21 +258,8 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.display_timer.start(100)
 
     def _on_mode_changed(self, index):
-        self.keti_widgets.setVisible(index == 0)
-        self.ur_direct_widgets.setVisible(index == 1)
-        self.tf_widgets.setVisible(index == 2)
-
-    def _on_robot_changed(self, robot_name):
-        presets = {
-            "UR10": ("192.168.1.77", "30003"),
-            "M1013": ("192.168.1.100", "12345"),
-            "RB10": ("192.168.1.100", "12345"),
-            "Indy7": ("192.168.1.100", "12345"),
-            "TestDummy": ("127.0.0.1", "0"),
-        }
-        if robot_name in presets:
-            self.edit_ip.setText(presets[robot_name][0])
-            self.edit_port.setText(presets[robot_name][1])
+        self.ur_direct_widgets.setVisible(index == 0)
+        self.tf_widgets.setVisible(index == 1)
 
     def _on_connect(self):
         if self.pose_reader is not None:
@@ -318,12 +273,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
         try:
             mode_index = self.combo_mode.currentIndex()
-            if mode_index == 0:  # KETIRobotSDK
-                robot_type = ROBOT_TYPES[self.combo_robot.currentText()]
-                ip = self.edit_ip.text()
-                port = int(self.edit_port.text())
-                self.pose_reader = KETISDKPoseReader(robot_type, ip, port)
-            elif mode_index == 1:  # UR Direct
+            if mode_index == 0:  # UR Direct
                 ip = self.edit_ur_ip.text()
                 port = int(self.edit_ur_port.text())
                 self.pose_reader = URDirectPoseReader(ip, port)
@@ -477,8 +427,6 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         filepath = os.path.join(data_dir, "pose_pairs.csv")
         mode_index = self.combo_mode.currentIndex()
         if mode_index == 0:
-            robot_name = self.combo_robot.currentText()
-        elif mode_index == 1:
             robot_name = "ur_direct"
         else:
             robot_name = "ros2_tf"
