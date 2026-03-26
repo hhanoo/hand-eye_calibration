@@ -35,6 +35,18 @@ class ArUcoDetector:
         )
         self.detector = aruco.ArucoDetector(self.aruco_dict, self.aruco_param)
 
+        # Board corner offsets in board coordinate frame
+        cols, rows = grid_shape
+        board_w = cols * marker_length + (cols - 1) * marker_separation
+        board_h = rows * marker_length + (rows - 1) * marker_separation
+        self.corner_offsets = np.array([
+            [0.0, 0.0, 0.0],              # 좌하단 (원점)
+            [board_w, 0.0, 0.0],           # 우하단
+            [0.0, board_h, 0.0],           # 좌상단
+            [board_w, board_h, 0.0],       # 우상단
+            [board_w / 2, board_h / 2, 0.0],  # 정중앙
+        ])
+
     def detect(self, color_img, camera_matrix, dist_coeffs):
         """
         Detect ArUco board and estimate its pose.
@@ -63,12 +75,18 @@ class ArUcoDetector:
         if retval == 0:
             return False, color_img, None
 
-        annotated = cv2.drawFrameAxes(
-            color_img, camera_matrix, dist_coeffs, rvec, tvec, 0.053
-        )
-
         Rotmat = np.zeros((3, 3))
         cv2.Rodrigues(rvec, Rotmat)
+
+        # Draw axes at all four board corners
+        annotated = color_img
+        axis_length = 0.03
+        for offset in self.corner_offsets:
+            corner_tvec = tvec.flatten() + Rotmat @ offset
+            annotated = cv2.drawFrameAxes(
+                annotated, camera_matrix, dist_coeffs,
+                rvec, corner_tvec.reshape(3, 1), axis_length,
+            )
 
         T = np.eye(4)
         T[0:3, 0:3] = Rotmat

@@ -4,6 +4,8 @@ Reads end-effector pose from /tf topic published by robot drivers
 (e.g. ur_robot_driver, doosan-robot2).
 """
 
+import time
+
 import numpy as np
 import rclpy
 from rclpy.duration import Duration
@@ -60,14 +62,20 @@ class ROS2TFPoseReader(PoseReader):
         self.tf_listener = TransformListener(self.tf_buffer, node)
 
     def connect(self) -> bool:
-        """Check if TF frames are available (5 second timeout)."""
-        try:
-            self.tf_buffer.lookup_transform(
-                self.base_frame, self.ee_frame, Time(), timeout=Duration(seconds=5.0)
-            )
-            return True
-        except (LookupException, ConnectivityException, ExtrapolationException):
-            return False
+        """Check if TF frames are available (5 second timeout).
+
+        Spins the node manually so the TF buffer can receive data
+        while waiting — avoids deadlock when called from the Qt main thread.
+        """
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            try:
+                self.tf_buffer.lookup_transform(self.base_frame, self.ee_frame, Time())
+                return True
+            except (LookupException, ConnectivityException, ExtrapolationException):
+                pass
+        return False
 
     def get_pose(self) -> np.ndarray:
         transform = self.tf_buffer.lookup_transform(

@@ -93,6 +93,6 @@ def save_calibration_result(filepath, X, algorithm, rmse=None, num_inliers=None)
             f.write(f"# RMSE: {rmse}\n")
         if num_inliers is not None:
             f.write(f"# Inliers: {num_inliers}\n")
-        f.write(f"# 4x4 Transform (camera to end-effector):\n")
+        f.write(f"# 4x4 Transform (end-effector to camera, T_hand_eye):\n")
         for row in X:
             f.write(",".join(f"{v:.10f}" for v in row) + "\n")

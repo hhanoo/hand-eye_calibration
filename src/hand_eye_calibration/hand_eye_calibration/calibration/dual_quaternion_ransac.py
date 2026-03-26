@@ -9,7 +9,6 @@ import numpy as np
 from ..hand_eye_calibration_lib import (
     DualQuaternion,
     HandEyeConfig,
-    align_paths_at_index,
     compute_hand_eye_calibration_RANSAC,
 )
 
@@ -27,7 +26,7 @@ def solve_dq_ransac(robot_T_list, marker_T_list, iterations=50, sample_size=3):
     Returns:
         (success, X, rmse, num_inliers)
         - success: bool
-        - X: 4x4 ndarray (hand-to-eye transform), or None if failed
+        - X: 4x4 ndarray (end-effector to camera, T_H_E), or None if failed
         - rmse: float, position RMSE
         - num_inliers: int
     """
@@ -46,14 +45,12 @@ def solve_dq_ransac(robot_T_list, marker_T_list, iterations=50, sample_size=3):
         dq_W_E = DualQuaternion.from_transformation_matrix(marker_T_inv)
         dq_W_E_vec.append(dq_W_E)
 
-    # Align paths at origin
-    dq_B_H_vec = align_paths_at_index(dq_B_H_vec)
-
     # Configure RANSAC
     config = HandEyeConfig()
     config.visualize = False
     config.ransac_max_number_iterations = iterations
     config.ransac_sample_size = sample_size
+    config.prefilter_poses_enabled = False # NOTE: Prefilter removes "redundant" poses by screw axis similarity. With small datasets this can discard too many poses, leaving too few valid samples and causing an infinite loop (prerejected samples skip full_iterations increment). Disable it.
 
     # Run RANSAC
     result = compute_hand_eye_calibration_RANSAC(dq_B_H_vec, dq_W_E_vec, config)
@@ -66,7 +63,7 @@ def solve_dq_ransac(robot_T_list, marker_T_list, iterations=50, sample_size=3):
     rmse = result[2]
     num_inliers = result[3]
 
-    # Convert to 4x4 matrix
-    X = np.linalg.inv(dq_H_E.to_matrix())
+    # Convert to 4x4 matrix (end2cam, T_H_E)
+    X = dq_H_E.to_matrix()
 
     return success, X, rmse, num_inliers

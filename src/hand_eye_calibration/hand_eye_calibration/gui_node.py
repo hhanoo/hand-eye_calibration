@@ -3,9 +3,12 @@ Hand-Eye Calibration GUI Node.
 ROS2 node with PyQt5 GUI for multi-robot hand-eye calibration.
 """
 
+import contextlib
 import copy
+import io
 import os
 import sys
+from datetime import datetime
 
 # Prevent OpenCV's bundled Qt from conflicting with PyQt5
 os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)  # noqa: E402
@@ -15,7 +18,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QThread, QTimer, pyqtSignal
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image
 
@@ -71,6 +74,55 @@ class CalibrationNode(Node):
     def _camera_info_callback(self, msg):
         self.camera_matrix = np.array(msg.k, dtype=np.float32).reshape(3, 3)
         self.dist_coeffs = np.array(msg.d, dtype=np.float32)
+
+
+class _LineEmitter(io.TextIOBase):
+    """stdout 리다이렉터: 한 줄씩 캡처해 pyqtSignal로 전달."""
+
+    def __init__(self, signal):
+        self._signal = signal
+        self._buf = ""
+
+    def write(self, text):
+        self._buf += text
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            if line.strip():
+                self._signal.emit(line)
+        return len(text)
+
+    def flush(self):
+        pass
+
+
+class CalibrationWorker(QThread):
+    finished = pyqtSignal(dict)
+    progress = pyqtSignal(str)
+
+    def __init__(self, algo, robot_T_list, marker_T_list):
+        super().__init__()
+        self.algo = algo
+        self.robot_T_list = robot_T_list
+        self.marker_T_list = marker_T_list
+
+    def run(self):
+        try:
+            with contextlib.redirect_stdout(_LineEmitter(self.progress)):
+                if self.algo == "Tsai-Lenz":
+                    X = solve_tsai_lenz(self.robot_T_list, self.marker_T_list)
+                    self.finished.emit({"success": True, "X": X, "algo": self.algo})
+                else:
+                    success, X, rmse, num_inliers = solve_dq_ransac(
+                        self.robot_T_list, self.marker_T_list,
+                        iterations=200, sample_size=3,
+                    )
+                    self.finished.emit({
+                        "success": success, "X": X, "rmse": rmse,
+                        "num_inliers": num_inliers, "algo": self.algo,
+                        "n": len(self.robot_T_list),
+                    })
+        except Exception as e:
+            self.finished.emit({"error": str(e)})
 
 
 class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
@@ -165,7 +217,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         robot_layout.addWidget(self.label_status)
 
         robot_layout.addStretch()
-        layout.addWidget(robot_group)
+        layout.addWidget(robot_group, 0)  # stretch=0: fixed height
 
         # === Middle: Camera + Data Table ===
         middle = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
@@ -203,10 +255,13 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
         middle.addWidget(right_panel)
         middle.setSizes([700, 500])
-        layout.addWidget(middle)
+        layout.addWidget(middle, 1)  # stretch=1: camera area takes all extra space
 
         # === Bottom: Calibration ===
         cal_group = QtWidgets.QGroupBox("Calibration")
+        cal_group.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed
+        )
         cal_layout = QtWidgets.QVBoxLayout(cal_group)
 
         controls = QtWidgets.QHBoxLayout()
@@ -238,11 +293,11 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
         self.result_text = QtWidgets.QTextEdit()
         self.result_text.setReadOnly(True)
-        self.result_text.setMaximumHeight(120)
+        self.result_text.setMaximumHeight(200)
         self.result_text.setPlaceholderText("Calibration result will appear here...")
         cal_layout.addWidget(self.result_text)
 
-        layout.addWidget(cal_group)
+        layout.addWidget(cal_group, 0)  # stretch=0: fixed height
 
     def _start_timers(self):
         # ROS2 spin
@@ -321,6 +376,28 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         )
         self.camera_label.setPixmap(scaled)
 
+    def _check_robot_stable(self, decimals=4):
+        """로봇이 정지했는지 확인 (소수점 decimals자리 반올림 비교, 2회)."""
+        try:
+            rclpy.spin_once(self.node, timeout_sec=0.05)
+            prev = np.round(self.pose_reader.get_pose(), decimals)
+            rclpy.spin_once(self.node, timeout_sec=0.05)
+            curr = np.round(self.pose_reader.get_pose(), decimals)
+        except Exception:
+            return False
+        return np.array_equal(prev, curr)
+
+    def _flash_camera(self, color, duration_ms=500):
+        """카메라 영역 테두리를 잠깐 색상으로 바꿔 시각 피드백 제공."""
+        self.camera_label.setStyleSheet(
+            f"background-color: #333; border: 8px solid {color};"
+        )
+        QtWidgets.QApplication.processEvents()
+        QTimer.singleShot(
+            duration_ms,
+            lambda: self.camera_label.setStyleSheet("background-color: #333;"),
+        )
+
     def _on_capture(self):
         if self.pose_reader is None or self.node.current_image is None:
             return
@@ -328,22 +405,36 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.result_text.setText("Camera info not received yet.")
             return
 
-        # Get marker pose
+        # 1) Check robot is stable
+        self.result_text.setText("Waiting for robot to stop...")
+        QtWidgets.QApplication.processEvents()
+        if not self._check_robot_stable():
+            self._flash_camera("red")
+            self.result_text.setText(
+                "Robot is still moving! Wait until fully stopped."
+            )
+            return
+
+        # 2) Wait for fresh image frame
+        rclpy.spin_once(self.node, timeout_sec=0.5)
+
+        # 3) Get robot pose and marker pose at the same moment
+        try:
+            robot_T = self.pose_reader.get_pose()
+        except Exception as e:
+            self._flash_camera("red")
+            self.result_text.setText(f"Failed to get robot pose: {e}")
+            return
+
         img = self.node.current_image.copy()
         success, _, marker_T = self.aruco.detect(
             img, self.node.camera_matrix, self.node.dist_coeffs
         )
         if not success:
+            self._flash_camera("red")
             self.result_text.setText(
                 "Marker not detected. Move robot so marker is visible."
             )
-            return
-
-        # Get robot pose
-        try:
-            robot_T = self.pose_reader.get_pose()
-        except Exception as e:
-            self.result_text.setText(f"Failed to get robot pose: {e}")
             return
 
         # Store
@@ -359,6 +450,10 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.table.setItem(idx - 1, 2, QtWidgets.QTableWidgetItem("OK"))
 
         self.label_count.setText(f"Captured: {idx} poses")
+        self.result_text.setText(
+            f"Pose #{idx} captured. Robot [{robot_T[0,3]:.4f}, {robot_T[1,3]:.4f}, {robot_T[2,3]:.4f}]"
+        )
+        self._flash_camera("lime")
 
     def _on_delete(self):
         rows = sorted(
@@ -380,42 +475,52 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.result_text.setText(f"Need at least 3 poses. Currently have {n}.")
             return
 
+        self.btn_calibrate.setEnabled(False)
+        self.result_text.setText("Calibrating...")
+
         algo = self.combo_algo.currentText()
-        try:
-            if algo == "Tsai-Lenz":
-                X = solve_tsai_lenz(self.robot_T_list, self.marker_T_list)
-                rmse_str = ""
-            else:  # DQ RANSAC
-                success, X, rmse, num_inliers = solve_dq_ransac(
-                    self.robot_T_list, self.marker_T_list
-                )
-                if not success:
-                    self.result_text.setText(
-                        "DQ RANSAC failed. Try collecting more diverse poses."
-                    )
-                    return
-                rmse_str = f"\nRMSE: {rmse:.6f}  |  Inliers: {num_inliers}/{n}"
+        self._cal_worker = CalibrationWorker(
+            algo, list(self.robot_T_list), list(self.marker_T_list)
+        )
+        self._cal_worker.finished.connect(self._on_calibration_done)
+        self._cal_worker.progress.connect(self.result_text.append)
+        self._cal_worker.start()
 
-            self.calibration_result = X
-            self.btn_save.setEnabled(True)
+    def _on_calibration_done(self, result):
+        self.btn_calibrate.setEnabled(True)
+        if "error" in result:
+            self.result_text.setText(f"Calibration error: {result['error']}")
+            self.node.get_logger().error(f"Calibration error: {result['error']}")
+            return
 
-            # Format result
-            mat_str = np.array2string(X, precision=6, suppress_small=True)
-            self.result_text.setText(
-                f"Algorithm: {algo}{rmse_str}\n"
-                f"X (camera to end-effector):\n{mat_str}"
-            )
+        algo = result["algo"]
+        if not result["success"]:
+            self.result_text.setText("DQ RANSAC failed. Try collecting more diverse poses.")
+            return
 
-        except Exception as e:
-            self.result_text.setText(f"Calibration error: {e}")
-            self.node.get_logger().error(f"Calibration error: {e}")
+        X = result["X"]
+        self.calibration_result = X
+        self.btn_save.setEnabled(True)
+
+        mat_str = np.array2string(X, precision=6, suppress_small=True)
+        if algo == "Tsai-Lenz":
+            rmse_str = ""
+        else:
+            rmse_pos, rmse_ori = result["rmse"]
+            rmse_str = f"\nRMSE pos: {rmse_pos:.6f}  ori: {rmse_ori:.6f}  |  Inliers: {result['num_inliers']}/{result['n']}"
+
+        self.result_text.setText(
+            f"Algorithm: {algo}{rmse_str}\n"
+            f"X (end-effector to camera, T_hand_eye):\n{mat_str}"
+        )
 
     def _on_save_result(self):
         if not hasattr(self, "calibration_result"):
             return
         data_dir = self.node.get_parameter("data_dir").value
-        filepath = os.path.join(data_dir, "calibration_result.txt")
+        ts = datetime.now().strftime("%y%m%d_%H%M")
         algo = self.combo_algo.currentText()
+        filepath = os.path.join(data_dir, f"calibration_result_{ts}_{algo}.txt")
         save_calibration_result(filepath, self.calibration_result, algo)
         self.result_text.append(f"\nResult saved to: {filepath}")
 
@@ -424,7 +529,8 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.result_text.setText("No data to save.")
             return
         data_dir = self.node.get_parameter("data_dir").value
-        filepath = os.path.join(data_dir, "pose_pairs.csv")
+        ts = datetime.now().strftime("%y%m%d_%H%M")
+        filepath = os.path.join(data_dir, f"pose_pairs_{ts}.csv")
         mode_index = self.combo_mode.currentIndex()
         if mode_index == 0:
             robot_name = "ur_direct"
