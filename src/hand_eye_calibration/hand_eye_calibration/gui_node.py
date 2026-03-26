@@ -42,7 +42,8 @@ class CalibrationNode(Node):
         # Declare parameters
         self.declare_parameter("image_topic", "/camera/camera/color/image_raw")
         self.declare_parameter("camera_info_topic", "/camera/camera/color/camera_info")
-        self.declare_parameter("marker_dict", 10)
+        self.declare_parameter("marker_size", 6)
+        self.declare_parameter("total_markers", 250)
         self.declare_parameter("board_grid_shape", [5, 7])
         self.declare_parameter("marker_length", 0.037)
         self.declare_parameter("marker_separation", 0.003)
@@ -138,8 +139,8 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         # ArUco detector
         grid_shape = tuple(node.get_parameter("board_grid_shape").value)
         self.aruco = ArUcoDetector(
-            marker_size=6,
-            total_markers=250,
+            marker_size=node.get_parameter("marker_size").value,
+            total_markers=node.get_parameter("total_markers").value,
             grid_shape=grid_shape,
             marker_length=node.get_parameter("marker_length").value,
             marker_separation=node.get_parameter("marker_separation").value,
@@ -207,6 +208,9 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         robot_layout.addWidget(self.tf_widgets)
         self.tf_widgets.hide()
 
+        # 초기 모드 위젯 가시성 설정 (UR Direct 표시)
+        self._on_mode_changed(0)
+
         # Connect button
         self.btn_connect = QtWidgets.QPushButton("Connect")
         self.btn_connect.clicked.connect(self._on_connect)
@@ -236,19 +240,23 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.label_count = QtWidgets.QLabel("Captured: 0 poses")
         right_layout.addWidget(self.label_count)
 
-        self.table = QtWidgets.QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["#", "Robot Pose (xyz)", "Marker"])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table = QtWidgets.QTableWidget(0, 2)
+        self.table.setHorizontalHeaderLabels(["Robot Pose (xyz)", "Marker Distance (xyz)"])
+        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.verticalHeader().setVisible(True)  # row header로 번호 표시
         right_layout.addWidget(self.table)
 
         btn_row = QtWidgets.QHBoxLayout()
         self.btn_capture = QtWidgets.QPushButton("Capture Pose")
+        self.btn_capture.setMinimumHeight(48)
+        self.btn_capture.setStyleSheet("font-size: 14px; font-weight: bold;")
         self.btn_capture.clicked.connect(self._on_capture)
         self.btn_capture.setEnabled(False)
         btn_row.addWidget(self.btn_capture)
 
         self.btn_delete = QtWidgets.QPushButton("Delete Selected")
+        self.btn_delete.setMinimumHeight(48)
         self.btn_delete.clicked.connect(self._on_delete)
         btn_row.addWidget(self.btn_delete)
         right_layout.addLayout(btn_row)
@@ -268,23 +276,29 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
         controls.addWidget(QtWidgets.QLabel("Algorithm:"))
         self.combo_algo = QtWidgets.QComboBox()
-        self.combo_algo.addItems(["DQ RANSAC", "Tsai-Lenz"])
+        self.combo_algo.addItems(["Tsai-Lenz","DQ RANSAC",  "OpenCV (All)"])
+        self.combo_algo.setCurrentIndex(0)  # 기본값: Tsai-Lenz
         controls.addWidget(self.combo_algo)
 
         self.btn_calibrate = QtWidgets.QPushButton("Calibrate")
+        self.btn_calibrate.setMinimumHeight(40)
+        self.btn_calibrate.setStyleSheet("font-size: 14px; font-weight: bold;")
         self.btn_calibrate.clicked.connect(self._on_calibrate)
         controls.addWidget(self.btn_calibrate)
 
         self.btn_save = QtWidgets.QPushButton("Save Result")
+        self.btn_save.setMinimumHeight(40)
         self.btn_save.clicked.connect(self._on_save_result)
         self.btn_save.setEnabled(False)
         controls.addWidget(self.btn_save)
 
         self.btn_save_data = QtWidgets.QPushButton("Save Data")
+        self.btn_save_data.setMinimumHeight(40)
         self.btn_save_data.clicked.connect(self._on_save_data)
         controls.addWidget(self.btn_save_data)
 
         self.btn_load_data = QtWidgets.QPushButton("Load Data")
+        self.btn_load_data.setMinimumHeight(40)
         self.btn_load_data.clicked.connect(self._on_load_data)
         controls.addWidget(self.btn_load_data)
 
@@ -444,10 +458,10 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         # Update table
         idx = len(self.robot_T_list)
         self.table.setRowCount(idx)
-        self.table.setItem(idx - 1, 0, QtWidgets.QTableWidgetItem(str(idx)))
         xyz = f"[{robot_T[0,3]:.3f}, {robot_T[1,3]:.3f}, {robot_T[2,3]:.3f}]"
-        self.table.setItem(idx - 1, 1, QtWidgets.QTableWidgetItem(xyz))
-        self.table.setItem(idx - 1, 2, QtWidgets.QTableWidgetItem("OK"))
+        self.table.setItem(idx - 1, 0, QtWidgets.QTableWidgetItem(xyz))
+        m_xyz = f"[{marker_T[0,3]:.3f}, {marker_T[1,3]:.3f}, {marker_T[2,3]:.3f}]"
+        self.table.setItem(idx - 1, 1, QtWidgets.QTableWidgetItem(m_xyz))
 
         self.label_count.setText(f"Captured: {idx} poses")
         self.result_text.setText(
@@ -464,9 +478,6 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.marker_T_list.pop(row)
             self.table.removeRow(row)
 
-        # Renumber
-        for i in range(self.table.rowCount()):
-            self.table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(i + 1)))
         self.label_count.setText(f"Captured: {len(self.robot_T_list)} poses")
 
     def _on_calibrate(self):
@@ -559,10 +570,10 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         # Update table
         self.table.setRowCount(len(robot_T_list))
         for i, (rt, mt) in enumerate(zip(robot_T_list, marker_T_list)):
-            self.table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(i + 1)))
             xyz = f"[{rt[0,3]:.3f}, {rt[1,3]:.3f}, {rt[2,3]:.3f}]"
-            self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(xyz))
-            self.table.setItem(i, 2, QtWidgets.QTableWidgetItem("OK"))
+            self.table.setItem(i, 0, QtWidgets.QTableWidgetItem(xyz))
+            m_xyz = f"[{mt[0,3]:.3f}, {mt[1,3]:.3f}, {mt[2,3]:.3f}]"
+            self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(m_xyz))
 
         self.label_count.setText(f"Captured: {len(robot_T_list)} poses")
         self.result_text.setText(f"Loaded {len(robot_T_list)} poses from: {filepath}")
