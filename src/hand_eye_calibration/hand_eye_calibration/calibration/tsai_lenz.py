@@ -61,12 +61,14 @@ def solve_tsai_lenz(robot_T_list, marker_T_list):
     if len(robot_T_list) < 3:
         raise ValueError("At least 3 pose pairs required for Tsai-Lenz calibration")
 
-    # Compute relative motions: A = inv(A2) * A1, B = B2 * inv(B1)
+    # Compute relative motions from all pairs (i, j), order-independent
+    n = len(robot_T_list)
     A_list = []
     B_list = []
-    for i in range(len(robot_T_list) - 1):
-        A_list.append(inv(robot_T_list[i + 1]) @ robot_T_list[i])
-        B_list.append(marker_T_list[i + 1] @ inv(marker_T_list[i]))
+    for i in range(n):
+        for j in range(i + 1, n):
+            A_list.append(inv(robot_T_list[j]) @ robot_T_list[i])
+            B_list.append(marker_T_list[j] @ inv(marker_T_list[i]))
 
     N = len(A_list)
 

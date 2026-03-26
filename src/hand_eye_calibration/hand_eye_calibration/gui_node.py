@@ -276,7 +276,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
         controls.addWidget(QtWidgets.QLabel("Algorithm:"))
         self.combo_algo = QtWidgets.QComboBox()
-        self.combo_algo.addItems(["Tsai-Lenz","DQ RANSAC",  "OpenCV (All)"])
+        self.combo_algo.addItems(["Tsai-Lenz", "DQ RANSAC"])
         self.combo_algo.setCurrentIndex(0)  # 기본값: Tsai-Lenz
         controls.addWidget(self.combo_algo)
 
@@ -531,6 +531,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         data_dir = self.node.get_parameter("data_dir").value
         ts = datetime.now().strftime("%y%m%d_%H%M")
         algo = self.combo_algo.currentText()
+        
         filepath = os.path.join(data_dir, f"calibration_result_{ts}_{algo}.txt")
         save_calibration_result(filepath, self.calibration_result, algo)
         self.result_text.append(f"\nResult saved to: {filepath}")
