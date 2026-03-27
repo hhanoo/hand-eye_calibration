@@ -374,23 +374,23 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         btn_panel.addLayout(cal_row)
 
         # --- Visual ---
-        viz_row = QtWidgets.QHBoxLayout()
-        viz_row.setSpacing(8)
-        viz_label = QtWidgets.QLabel("Visual :")
-        viz_label.setFixedWidth(LABEL_W)
-        viz_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        viz_row.addWidget(viz_label)
-        self.btn_viz_result = QtWidgets.QPushButton("Calibration Result")
-        self.btn_viz_result.setFixedHeight(BTN_H)
-        self.btn_viz_result.setStyleSheet(BTN_STYLE)
-        self.btn_viz_result.clicked.connect(self._on_viz_result)
-        viz_row.addWidget(self.btn_viz_result, 1)
-        self.btn_viz_poses = QtWidgets.QPushButton("Data Poses")
-        self.btn_viz_poses.setFixedHeight(BTN_H)
-        self.btn_viz_poses.setStyleSheet(BTN_STYLE)
-        self.btn_viz_poses.clicked.connect(self._on_viz_poses)
-        viz_row.addWidget(self.btn_viz_poses, 1)
-        btn_panel.addLayout(viz_row)
+        plot_row = QtWidgets.QHBoxLayout()
+        plot_row.setSpacing(8)
+        plot_label = QtWidgets.QLabel("Plot :")
+        plot_label.setFixedWidth(LABEL_W)
+        plot_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        plot_row.addWidget(plot_label)
+        self.btn_plot_result = QtWidgets.QPushButton("Calibration Result")
+        self.btn_plot_result.setFixedHeight(BTN_H)
+        self.btn_plot_result.setStyleSheet(BTN_STYLE)
+        self.btn_plot_result.clicked.connect(self._on_plot_result)
+        plot_row.addWidget(self.btn_plot_result, 1)
+        self.btn_plot_poses = QtWidgets.QPushButton("Data Poses")
+        self.btn_plot_poses.setFixedHeight(BTN_H)
+        self.btn_plot_poses.setStyleSheet(BTN_STYLE)
+        self.btn_plot_poses.clicked.connect(self._on_plot_poses)
+        plot_row.addWidget(self.btn_plot_poses, 1)
+        btn_panel.addLayout(plot_row)
 
         tools_layout.addLayout(btn_panel, 5)
 
@@ -549,6 +549,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             f"Pose #{idx} captured. Robot [{robot_T[0,3]:.4f}, {robot_T[1,3]:.4f}, {robot_T[2,3]:.4f}]"
         )
         self._flash_camera("lime")
+        self._update_pose_plot()
 
     def _on_delete(self):
         rows = sorted(
@@ -560,6 +561,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.table.removeRow(row)
 
         self.label_count.setText(f"Captured: {len(self.robot_T_list)} poses")
+        self._update_pose_plot()
 
     def _on_calibrate(self):
         n = len(self.robot_T_list)
@@ -662,7 +664,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.label_count.setText(f"Captured: {len(robot_T_list)} poses")
         self.result_text.setText(f"Loaded {len(robot_T_list)} poses from: {filepath}")
 
-    def _on_viz_result(self):
+    def _on_plot_result(self):
         """Visualize calibration result or load one from file."""
         X = getattr(self, "calibration_result", None)
         if X is None:
@@ -683,13 +685,13 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         else:
             algo = self.combo_algo.currentText()
 
-        self._viz_dlg = plot_calibration_result(
+        self._plot_dlg = plot_calibration_result(
             X,
             title=f"T_hand_eye ({algo})",
             parent=self,
         )
 
-    def _on_viz_poses(self):
+    def _on_plot_poses(self):
         """Visualize captured pose pairs (current data or load from file)."""
         robot_T = self.robot_T_list
         marker_T = self.marker_T_list
@@ -713,7 +715,13 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.result_text.setText("No pose data to visualize.")
             return
 
-        self._viz_dlg = plot_pose_pairs(robot_T, marker_T, parent=self)
+        self._pose_dlg = plot_pose_pairs(robot_T, marker_T, parent=self)
+
+    def _update_pose_plot(self):
+        """Update pose visualization dialog if it is open."""
+        dlg = getattr(self, "_pose_dlg", None)
+        if dlg is not None and dlg.isVisible():
+            dlg.update(self.robot_T_list, self.marker_T_list)
 
     def closeEvent(self, event):
         self.ros_timer.stop()

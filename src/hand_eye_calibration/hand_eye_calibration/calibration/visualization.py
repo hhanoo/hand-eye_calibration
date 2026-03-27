@@ -113,103 +113,139 @@ def plot_calibration_result(X, title=None, parent=None):
     return dlg
 
 
+class PosePairDialog(QtWidgets.QDialog):
+    """Live-updating 3D visualization of captured pose pairs."""
+
+    def __init__(self, robot_T_list, marker_T_list, title=None, parent=None):
+        super().__init__(parent)
+        self._title = title or "Pose Pairs"
+        self.setWindowTitle(self._title)
+        self.resize(1200, 600)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self._fig = Figure(figsize=(14, 6))
+        self._canvas = FigureCanvasQTAgg(self._fig)
+        layout.addWidget(self._canvas)
+
+        self.update(robot_T_list, marker_T_list)
+
+    def update(self, robot_T_list, marker_T_list):
+        """Redraw plots with current data, preserving camera angles."""
+        # Save current view angles and limits before clearing
+        views = {}
+        for ax in self._fig.axes:
+            views[ax.get_title()] = {
+                "elev": ax.elev,
+                "azim": ax.azim,
+                "xlim": ax.get_xlim(),
+                "ylim": ax.get_ylim(),
+                "zlim": ax.get_zlim(),
+            }
+
+        self._fig.clear()
+
+        if not robot_T_list:
+            self._canvas.draw()
+            return
+
+        n = len(robot_T_list)
+        colors = np.arange(n)
+
+        # --- Left: Robot EE poses (base frame) ---
+        ax1 = self._fig.add_subplot(121, projection="3d")
+
+        robot_positions = []
+        for T in robot_T_list:
+            robot_positions.append(T[:3, 3])
+            _draw_frame(ax1, T, "", axis_length=0.02, linewidth=1)
+
+        robot_positions = np.array(robot_positions)
+        ax1.scatter(
+            robot_positions[:, 0],
+            robot_positions[:, 1],
+            robot_positions[:, 2],
+            c=colors,
+            cmap="viridis",
+            s=30,
+            zorder=5,
+        )
+        ax1.plot(
+            robot_positions[:, 0],
+            robot_positions[:, 1],
+            robot_positions[:, 2],
+            "k-",
+            alpha=0.3,
+            linewidth=0.8,
+        )
+
+        _draw_frame(ax1, np.eye(4), "Base", axis_length=0.05, linewidth=2.5)
+        ax1.text(0, 0, 0, "  Base", fontsize=9, fontweight="bold")
+
+        ax1.set_xlabel("X (m)")
+        ax1.set_ylabel("Y (m)")
+        ax1.set_zlabel("Z (m)")
+        ax1.set_title("End-Effector Poses (Base Frame)")
+        _set_equal_aspect(ax1, robot_positions.tolist() + [[0, 0, 0]])
+        if ax1.get_title() in views:
+            v = views[ax1.get_title()]
+            ax1.view_init(elev=v["elev"], azim=v["azim"])
+            ax1.set_xlim(v["xlim"])
+            ax1.set_ylim(v["ylim"])
+            ax1.set_zlim(v["zlim"])
+
+        # --- Right: Camera poses (marker frame, marker fixed at origin) ---
+        ax2 = self._fig.add_subplot(122, projection="3d")
+
+        cam_positions = []
+        for T_cam2marker in marker_T_list:
+            T_marker2cam = np.linalg.inv(T_cam2marker)
+            cam_positions.append(T_marker2cam[:3, 3])
+            _draw_frame(ax2, T_marker2cam, "", axis_length=0.02, linewidth=1)
+
+        cam_positions = np.array(cam_positions)
+        ax2.scatter(
+            cam_positions[:, 0],
+            cam_positions[:, 1],
+            cam_positions[:, 2],
+            c=colors,
+            cmap="viridis",
+            s=30,
+            zorder=5,
+        )
+        ax2.plot(
+            cam_positions[:, 0],
+            cam_positions[:, 1],
+            cam_positions[:, 2],
+            "k-",
+            alpha=0.3,
+            linewidth=0.8,
+        )
+
+        _draw_frame(ax2, np.eye(4), "Marker", axis_length=0.05, linewidth=2.5)
+        ax2.text(0, 0, 0, "  Marker (fixed)", fontsize=9, fontweight="bold")
+
+        ax2.set_xlabel("X (m)")
+        ax2.set_ylabel("Y (m)")
+        ax2.set_zlabel("Z (m)")
+        ax2.set_title("Camera Poses (Marker Frame)")
+        _set_equal_aspect(ax2, cam_positions.tolist() + [[0, 0, 0]])
+
+        if ax2.get_title() in views:
+            v = views[ax2.get_title()]
+            ax2.view_init(elev=v["elev"], azim=v["azim"])
+            ax2.set_xlim(v["xlim"])
+            ax2.set_ylim(v["ylim"])
+            ax2.set_zlim(v["zlim"])
+
+        self._fig.suptitle(f"{self._title} ({n} samples)", fontsize=13)
+        self._fig.tight_layout()
+        self._canvas.draw()
+
+
 def plot_pose_pairs(robot_T_list, marker_T_list, title=None, parent=None):
-    """
-    Plot captured pose pairs in 3D.
-
-    Left: Robot EE poses in base frame (base -> end-effector)
-    Right: Camera poses in marker frame (marker is fixed, invert cam->marker to get
-           marker->camera, showing where the camera was relative to the fixed marker)
-
-    Args:
-        robot_T_list: list of 4x4 robot transforms (base to end-effector)
-        marker_T_list: list of 4x4 marker transforms (camera to marker)
-        title: Optional plot title
-        parent: Parent QWidget (keeps dialog alive)
-    """
-    n = len(robot_T_list)
-    colors = np.arange(n)
-    fig = Figure(figsize=(14, 6))
-
-    # --- Left: Robot EE poses (base frame) ---
-    ax1 = fig.add_subplot(121, projection="3d")
-
-    robot_positions = []
-    for T in robot_T_list:
-        robot_positions.append(T[:3, 3])
-        _draw_frame(ax1, T, "", axis_length=0.02, linewidth=1)
-
-    robot_positions = np.array(robot_positions)
-    ax1.scatter(
-        robot_positions[:, 0],
-        robot_positions[:, 1],
-        robot_positions[:, 2],
-        c=colors,
-        cmap="viridis",
-        s=30,
-        zorder=5,
-    )
-    ax1.plot(
-        robot_positions[:, 0],
-        robot_positions[:, 1],
-        robot_positions[:, 2],
-        "k-",
-        alpha=0.3,
-        linewidth=0.8,
-    )
-
-    _draw_frame(ax1, np.eye(4), "Base", axis_length=0.05, linewidth=2.5)
-    ax1.text(0, 0, 0, "  Base", fontsize=9, fontweight="bold")
-
-    ax1.set_xlabel("X (m)")
-    ax1.set_ylabel("Y (m)")
-    ax1.set_zlabel("Z (m)")
-    ax1.set_title("End-Effector Poses (Base Frame)")
-    _set_equal_aspect(ax1, robot_positions.tolist() + [[0, 0, 0]])
-
-    # --- Right: Camera poses (marker frame, marker fixed at origin) ---
-    ax2 = fig.add_subplot(122, projection="3d")
-
-    cam_positions = []
-    for T_cam2marker in marker_T_list:
-        # Invert: cam->marker => marker->camera
-        T_marker2cam = np.linalg.inv(T_cam2marker)
-        cam_positions.append(T_marker2cam[:3, 3])
-        _draw_frame(ax2, T_marker2cam, "", axis_length=0.02, linewidth=1)
-
-    cam_positions = np.array(cam_positions)
-    ax2.scatter(
-        cam_positions[:, 0],
-        cam_positions[:, 1],
-        cam_positions[:, 2],
-        c=colors,
-        cmap="viridis",
-        s=30,
-        zorder=5,
-    )
-    ax2.plot(
-        cam_positions[:, 0],
-        cam_positions[:, 1],
-        cam_positions[:, 2],
-        "k-",
-        alpha=0.3,
-        linewidth=0.8,
-    )
-
-    # Marker (fixed) at origin
-    _draw_frame(ax2, np.eye(4), "Marker", axis_length=0.05, linewidth=2.5)
-    ax2.text(0, 0, 0, "  Marker (fixed)", fontsize=9, fontweight="bold")
-
-    ax2.set_xlabel("X (m)")
-    ax2.set_ylabel("Y (m)")
-    ax2.set_zlabel("Z (m)")
-    ax2.set_title("Camera Poses (Marker Frame)")
-    _set_equal_aspect(ax2, cam_positions.tolist() + [[0, 0, 0]])
-
-    fig.suptitle(title or f"Captured Pose Pairs ({n} samples)", fontsize=13)
-    fig.tight_layout()
-
-    dlg = _PlotDialog(fig, title or "Pose Pairs", parent)
-    dlg.resize(1200, 600)
+    """Create and show a live-updating pose pair visualization dialog."""
+    dlg = PosePairDialog(robot_T_list, marker_T_list, title, parent)
     dlg.show()
     return dlg
