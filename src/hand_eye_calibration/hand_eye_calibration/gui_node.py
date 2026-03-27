@@ -24,7 +24,10 @@ from sensor_msgs.msg import CameraInfo, Image
 
 from .calibration import (
     ArUcoDetector,
+    load_calibration_result,
     load_pose_pairs,
+    plot_calibration_result,
+    plot_pose_pairs,
     save_calibration_result,
     save_pose_pairs,
     solve_dq_ransac,
@@ -114,14 +117,21 @@ class CalibrationWorker(QThread):
                     self.finished.emit({"success": True, "X": X, "algo": self.algo})
                 else:
                     success, X, rmse, num_inliers = solve_dq_ransac(
-                        self.robot_T_list, self.marker_T_list,
-                        iterations=200, sample_size=3,
+                        self.robot_T_list,
+                        self.marker_T_list,
+                        iterations=200,
+                        sample_size=3,
                     )
-                    self.finished.emit({
-                        "success": success, "X": X, "rmse": rmse,
-                        "num_inliers": num_inliers, "algo": self.algo,
-                        "n": len(self.robot_T_list),
-                    })
+                    self.finished.emit(
+                        {
+                            "success": success,
+                            "X": X,
+                            "rmse": rmse,
+                            "num_inliers": num_inliers,
+                            "algo": self.algo,
+                            "n": len(self.robot_T_list),
+                        }
+                    )
         except Exception as e:
             self.finished.emit({"error": str(e)})
 
@@ -168,21 +178,33 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.combo_mode.currentIndexChanged.connect(self._on_mode_changed)
         robot_layout.addWidget(self.combo_mode)
 
+        sep_r1 = QtWidgets.QFrame()
+        sep_r1.setFrameShape(QtWidgets.QFrame.VLine)
+        sep_r1.setFrameShadow(QtWidgets.QFrame.Sunken)
+        robot_layout.addSpacing(8)
+        robot_layout.addWidget(sep_r1)
+        robot_layout.addSpacing(8)
+
         # UR Direct widgets (single read-only socket, pendant-friendly)
         self.ur_direct_widgets = QtWidgets.QWidget()
         ur_direct_layout = QtWidgets.QHBoxLayout(self.ur_direct_widgets)
         ur_direct_layout.setContentsMargins(0, 0, 0, 0)
+        ur_direct_layout.setSpacing(4)
 
         ur_direct_layout.addWidget(QtWidgets.QLabel("IP:"))
         self.edit_ur_ip = QtWidgets.QLineEdit("192.168.1.77")
         self.edit_ur_ip.setFixedWidth(130)
         ur_direct_layout.addWidget(self.edit_ur_ip)
 
+        ur_direct_layout.addSpacing(8)
         ur_direct_layout.addWidget(QtWidgets.QLabel("Port:"))
         self.edit_ur_port = QtWidgets.QLineEdit("30003")
         self.edit_ur_port.setFixedWidth(60)
         ur_direct_layout.addWidget(self.edit_ur_port)
 
+        self.ur_direct_widgets.setSizePolicy(
+            QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred
+        )
         robot_layout.addWidget(self.ur_direct_widgets)
         self.ur_direct_widgets.hide()
 
@@ -190,6 +212,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.tf_widgets = QtWidgets.QWidget()
         tf_layout = QtWidgets.QHBoxLayout(self.tf_widgets)
         tf_layout.setContentsMargins(0, 0, 0, 0)
+        tf_layout.setSpacing(4)
 
         tf_layout.addWidget(QtWidgets.QLabel("Base Frame:"))
         self.edit_base_frame = QtWidgets.QLineEdit(
@@ -198,6 +221,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.edit_base_frame.setFixedWidth(120)
         tf_layout.addWidget(self.edit_base_frame)
 
+        tf_layout.addSpacing(8)
         tf_layout.addWidget(QtWidgets.QLabel("EE Frame:"))
         self.edit_ee_frame = QtWidgets.QLineEdit(
             self.node.get_parameter("tf_ee_frame").value
@@ -205,22 +229,33 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.edit_ee_frame.setFixedWidth(120)
         tf_layout.addWidget(self.edit_ee_frame)
 
+        self.tf_widgets.setSizePolicy(
+            QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred
+        )
         robot_layout.addWidget(self.tf_widgets)
         self.tf_widgets.hide()
 
         # 초기 모드 위젯 가시성 설정 (UR Direct 표시)
         self._on_mode_changed(0)
 
+        sep_r2 = QtWidgets.QFrame()
+        sep_r2.setFrameShape(QtWidgets.QFrame.VLine)
+        sep_r2.setFrameShadow(QtWidgets.QFrame.Sunken)
+        robot_layout.addSpacing(8)
+        robot_layout.addWidget(sep_r2)
+        robot_layout.addSpacing(8)
+
         # Connect button
         self.btn_connect = QtWidgets.QPushButton("Connect")
+        self.btn_connect.setStyleSheet("padding: 4px 14px;")
         self.btn_connect.clicked.connect(self._on_connect)
         robot_layout.addWidget(self.btn_connect)
+
+        robot_layout.addStretch()
 
         self.label_status = QtWidgets.QLabel("Disconnected")
         self.label_status.setStyleSheet("color: red; font-weight: bold;")
         robot_layout.addWidget(self.label_status)
-
-        robot_layout.addStretch()
         layout.addWidget(robot_group, 0)  # stretch=0: fixed height
 
         # === Middle: Camera + Data Table ===
@@ -236,13 +271,18 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         # Data table + buttons
         right_panel = QtWidgets.QWidget()
         right_layout = QtWidgets.QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(9, 9, 0, 0)
 
         self.label_count = QtWidgets.QLabel("Captured: 0 poses")
         right_layout.addWidget(self.label_count)
 
         self.table = QtWidgets.QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["Robot Pose (xyz)", "Marker Distance (xyz)"])
-        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        self.table.setHorizontalHeaderLabels(
+            ["Robot Pose (xyz)", "Marker Distance (xyz)"]
+        )
+        self.table.horizontalHeader().setSectionResizeMode(
+            QtWidgets.QHeaderView.Stretch
+        )
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.verticalHeader().setVisible(True)  # row header로 번호 표시
         right_layout.addWidget(self.table)
@@ -265,53 +305,96 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         middle.setSizes([700, 500])
         layout.addWidget(middle, 1)  # stretch=1: camera area takes all extra space
 
-        # === Bottom: Calibration ===
-        cal_group = QtWidgets.QGroupBox("Calibration")
-        cal_group.setSizePolicy(
+        # === Bottom: Tools ===
+        tools_group = QtWidgets.QGroupBox("Tools")
+        tools_group.setSizePolicy(
             QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed
         )
-        cal_layout = QtWidgets.QVBoxLayout(cal_group)
+        tools_layout = QtWidgets.QHBoxLayout(tools_group)
 
-        controls = QtWidgets.QHBoxLayout()
+        BTN_H = 36
+        BTN_STYLE = "padding: 0 14px;"
+        LABEL_W = 70
 
-        controls.addWidget(QtWidgets.QLabel("Algorithm:"))
-        self.combo_algo = QtWidgets.QComboBox()
-        self.combo_algo.addItems(["Tsai-Lenz", "DQ RANSAC"])
-        self.combo_algo.setCurrentIndex(0)  # 기본값: Tsai-Lenz
-        controls.addWidget(self.combo_algo)
-
-        self.btn_calibrate = QtWidgets.QPushButton("Calibrate")
-        self.btn_calibrate.setMinimumHeight(40)
-        self.btn_calibrate.setStyleSheet("font-size: 14px; font-weight: bold;")
-        self.btn_calibrate.clicked.connect(self._on_calibrate)
-        controls.addWidget(self.btn_calibrate)
-
-        self.btn_save = QtWidgets.QPushButton("Save Result")
-        self.btn_save.setMinimumHeight(40)
-        self.btn_save.clicked.connect(self._on_save_result)
-        self.btn_save.setEnabled(False)
-        controls.addWidget(self.btn_save)
-
-        self.btn_save_data = QtWidgets.QPushButton("Save Data")
-        self.btn_save_data.setMinimumHeight(40)
-        self.btn_save_data.clicked.connect(self._on_save_data)
-        controls.addWidget(self.btn_save_data)
-
-        self.btn_load_data = QtWidgets.QPushButton("Load Data")
-        self.btn_load_data.setMinimumHeight(40)
-        self.btn_load_data.clicked.connect(self._on_load_data)
-        controls.addWidget(self.btn_load_data)
-
-        controls.addStretch()
-        cal_layout.addLayout(controls)
-
+        # Left: result text
         self.result_text = QtWidgets.QTextEdit()
         self.result_text.setReadOnly(True)
-        self.result_text.setMaximumHeight(200)
+        self.result_text.setMaximumHeight(130)
         self.result_text.setPlaceholderText("Calibration result will appear here...")
-        cal_layout.addWidget(self.result_text)
+        tools_layout.addWidget(self.result_text, 7)
 
-        layout.addWidget(cal_group, 0)  # stretch=0: fixed height
+        # Right: buttons (3 rows with labels)
+        btn_panel = QtWidgets.QVBoxLayout()
+        btn_panel.setContentsMargins(9, 0, 0, 0)
+
+        # --- CSV ---
+        csv_row = QtWidgets.QHBoxLayout()
+        csv_row.setSpacing(8)
+        csv_label = QtWidgets.QLabel("CSV :")
+        csv_label.setFixedWidth(LABEL_W)
+        csv_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        csv_row.addWidget(csv_label)
+        self.btn_load_data = QtWidgets.QPushButton("Load Data")
+        self.btn_load_data.setFixedHeight(BTN_H)
+        self.btn_load_data.setStyleSheet(BTN_STYLE)
+        self.btn_load_data.clicked.connect(self._on_load_data)
+        csv_row.addWidget(self.btn_load_data, 1)
+        self.btn_save_data = QtWidgets.QPushButton("Save Data")
+        self.btn_save_data.setFixedHeight(BTN_H)
+        self.btn_save_data.setStyleSheet(BTN_STYLE)
+        self.btn_save_data.clicked.connect(self._on_save_data)
+        csv_row.addWidget(self.btn_save_data, 1)
+        btn_panel.addLayout(csv_row)
+
+        # --- Algorithm ---
+        cal_row = QtWidgets.QHBoxLayout()
+        cal_row.setSpacing(8)
+        algo_label = QtWidgets.QLabel("Algorithm :")
+        algo_label.setFixedWidth(LABEL_W)
+        algo_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        cal_row.addWidget(algo_label)
+        self.combo_algo = QtWidgets.QComboBox()
+        self.combo_algo.addItems(["Tsai-Lenz", "DQ RANSAC"])
+        self.combo_algo.setCurrentIndex(0)
+        self.combo_algo.setFixedHeight(BTN_H)
+        cal_row.addWidget(self.combo_algo)
+        self.btn_calibrate = QtWidgets.QPushButton("Calibrate")
+        self.btn_calibrate.setFixedHeight(BTN_H)
+        self.btn_calibrate.setStyleSheet(
+            "font-size: 14px; font-weight: bold; padding: 0 18px;"
+        )
+        self.btn_calibrate.clicked.connect(self._on_calibrate)
+        cal_row.addWidget(self.btn_calibrate, 1)
+        self.btn_save = QtWidgets.QPushButton("Save Result")
+        self.btn_save.setFixedHeight(BTN_H)
+        self.btn_save.setStyleSheet(BTN_STYLE)
+        self.btn_save.clicked.connect(self._on_save_result)
+        self.btn_save.setEnabled(False)
+        cal_row.addWidget(self.btn_save, 1)
+        btn_panel.addLayout(cal_row)
+
+        # --- Visual ---
+        viz_row = QtWidgets.QHBoxLayout()
+        viz_row.setSpacing(8)
+        viz_label = QtWidgets.QLabel("Visual :")
+        viz_label.setFixedWidth(LABEL_W)
+        viz_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        viz_row.addWidget(viz_label)
+        self.btn_viz_result = QtWidgets.QPushButton("Calibration Result")
+        self.btn_viz_result.setFixedHeight(BTN_H)
+        self.btn_viz_result.setStyleSheet(BTN_STYLE)
+        self.btn_viz_result.clicked.connect(self._on_viz_result)
+        viz_row.addWidget(self.btn_viz_result, 1)
+        self.btn_viz_poses = QtWidgets.QPushButton("Data Poses")
+        self.btn_viz_poses.setFixedHeight(BTN_H)
+        self.btn_viz_poses.setStyleSheet(BTN_STYLE)
+        self.btn_viz_poses.clicked.connect(self._on_viz_poses)
+        viz_row.addWidget(self.btn_viz_poses, 1)
+        btn_panel.addLayout(viz_row)
+
+        tools_layout.addLayout(btn_panel, 5)
+
+        layout.addWidget(tools_group, 0)  # stretch=0: fixed height
 
     def _start_timers(self):
         # ROS2 spin
@@ -424,9 +507,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         QtWidgets.QApplication.processEvents()
         if not self._check_robot_stable():
             self._flash_camera("red")
-            self.result_text.setText(
-                "Robot is still moving! Wait until fully stopped."
-            )
+            self.result_text.setText("Robot is still moving! Wait until fully stopped.")
             return
 
         # 2) Wait for fresh image frame
@@ -506,7 +587,9 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
         algo = result["algo"]
         if not result["success"]:
-            self.result_text.setText("DQ RANSAC failed. Try collecting more diverse poses.")
+            self.result_text.setText(
+                "DQ RANSAC failed. Try collecting more diverse poses."
+            )
             return
 
         X = result["X"]
@@ -531,7 +614,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         data_dir = self.node.get_parameter("data_dir").value
         ts = datetime.now().strftime("%y%m%d_%H%M")
         algo = self.combo_algo.currentText()
-        
+
         filepath = os.path.join(data_dir, f"calibration_result_{ts}_{algo}.txt")
         save_calibration_result(filepath, self.calibration_result, algo)
         self.result_text.append(f"\nResult saved to: {filepath}")
@@ -578,6 +661,59 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
         self.label_count.setText(f"Captured: {len(robot_T_list)} poses")
         self.result_text.setText(f"Loaded {len(robot_T_list)} poses from: {filepath}")
+
+    def _on_viz_result(self):
+        """Visualize calibration result or load one from file."""
+        X = getattr(self, "calibration_result", None)
+        if X is None:
+            filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self,
+                "Load Calibration Result",
+                "",
+                "Text Files (*.txt);;All Files (*)",
+            )
+            if not filepath:
+                return
+            try:
+                X, meta = load_calibration_result(filepath)
+                algo = meta.get("algorithm", "Unknown")
+            except Exception as e:
+                self.result_text.setText(f"Failed to load result: {e}")
+                return
+        else:
+            algo = self.combo_algo.currentText()
+
+        self._viz_dlg = plot_calibration_result(
+            X,
+            title=f"T_hand_eye ({algo})",
+            parent=self,
+        )
+
+    def _on_viz_poses(self):
+        """Visualize captured pose pairs (current data or load from file)."""
+        robot_T = self.robot_T_list
+        marker_T = self.marker_T_list
+
+        if not robot_T:
+            filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self,
+                "Load Pose Data",
+                "",
+                "CSV Files (*.csv);;All Files (*)",
+            )
+            if not filepath:
+                return
+            try:
+                robot_T, marker_T = load_pose_pairs(filepath)
+            except Exception as e:
+                self.result_text.setText(f"Failed to load poses: {e}")
+                return
+
+        if not robot_T:
+            self.result_text.setText("No pose data to visualize.")
+            return
+
+        self._viz_dlg = plot_pose_pairs(robot_T, marker_T, parent=self)
 
     def closeEvent(self, event):
         self.ros_timer.stop()

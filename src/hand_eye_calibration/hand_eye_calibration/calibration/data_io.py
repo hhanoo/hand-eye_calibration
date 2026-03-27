@@ -96,3 +96,33 @@ def save_calibration_result(filepath, X, algorithm, rmse=None, num_inliers=None)
         f.write(f"# 4x4 Transform (end-effector to camera, T_hand_eye):\n")
         for row in X:
             f.write(",".join(f"{v:.10f}" for v in row) + "\n")
+
+
+def load_calibration_result(filepath):
+    """
+    Load calibration result (4x4 transform) from text file.
+
+    Returns:
+        (X, metadata) - 4x4 numpy array and dict with algorithm, date, etc.
+    """
+    rows = []
+    metadata = {}
+
+    with open(filepath, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("# Algorithm:"):
+                metadata["algorithm"] = line.split(":", 1)[1].strip()
+            elif line.startswith("# Date:"):
+                metadata["date"] = line.split(":", 1)[1].strip()
+            elif line.startswith("# RMSE:"):
+                metadata["rmse"] = line.split(":", 1)[1].strip()
+            elif line.startswith("# Inliers:"):
+                metadata["inliers"] = line.split(":", 1)[1].strip()
+            elif line.startswith("#"):
+                continue
+            elif line:
+                rows.append([float(v) for v in line.split(",")])
+
+    X = np.array(rows).reshape(4, 4)
+    return X, metadata
