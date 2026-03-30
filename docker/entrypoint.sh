@@ -24,8 +24,8 @@ alias gui='ros2 run hand_eye_calibration gui_node'
 alias launch='ros2 launch hand_eye_calibration calibration.launch.py'
 alias doosan='ros2 launch dsr_pose_reader dsr_pose_reader.launch.py'
 alias build='cd /ros2_ws && colcon build --symlink-install && source install/setup.bash'
-alias help_hand_eye_calibration='echo; echo "[hand_eye_calibration] Commands: camera, gui, launch, doosan, build"'
-case $- in *i*) help_hand_eye_calibration ;; esac
+alias cmd_help='echo; echo "[hand_eye_calibration] Commands: camera, gui, launch, doosan, build"'
+case $- in *i*) cmd_help ;; esac
 ALIASEOF
 
 # Ensure root's .bashrc sources the alias file (once)

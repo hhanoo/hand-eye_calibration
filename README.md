@@ -380,13 +380,16 @@ ros2 launch hand_eye_calibration calibration.launch.py
 
 ### Docker alias (컨테이너 내부)
 
-| alias    | 설명                    | 참고                                      |
-| -------- | ----------------------- | ----------------------------------------- |
-| `camera` | RealSense 카메라만 실행 | 1280x720@30fps, depth alignment 활성화    |
-| `gui`    | GUI만 실행              | 카메라 노드가 별도 실행되어 있어야 함     |
-| `launch` | 카메라 + GUI 동시 실행  | `calibration.launch.py` 사용              |
-| `doosan` | Doosan 포즈 리더 실행   | `config/default.yaml` 설정 사용           |
-| `build`  | 워크스페이스 빌드       | `colcon build --symlink-install` + source |
+전체 alias 정의는 [entrypoint.sh](docker/entrypoint.sh)를 참고하세요.
+
+| alias      | 설명                        | 참고                                                                              |
+| ---------- | --------------------------- | --------------------------------------------------------------------------------- |
+| `camera`   | RealSense 카메라 실행       | —                                                                                 |
+| `gui`      | GUI 실행                    | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)          |
+| `launch`   | 카메라 + GUI 동시 실행      | [calibration.launch.py](src/hand_eye_calibration/launch/calibration.launch.py)    |
+| `doosan`   | Doosan 포즈 리더 실행       | [dsr_pose_reader.launch.py](src/dsr_pose_reader/launch/dsr_pose_reader.launch.py) |
+| `build`    | 워크스페이스 빌드           | —                                                                                 |
+| `cmd_help` | 사용 가능한 alias 목록 출력 | 컨테이너 접속 시 자동 출력                                                        |
 
 ---
 
