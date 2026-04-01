@@ -166,6 +166,11 @@ RUN echo "export PATH=/usr/local/cuda/bin:\$PATH" >> /root/.bashrc && \
 WORKDIR /ros2_ws
 RUN mkdir -p /ros2_ws/src
 
+# Aliases ---------------------------------------------------------------
+COPY ./aliases.sh /etc/profile.d/aliases.sh
+RUN chmod 644 /etc/profile.d/aliases.sh && \
+    echo 'source /etc/profile.d/aliases.sh' >> /etc/bash.bashrc
+
 # Entrypoint ---------------------------------------------------------------
 COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
