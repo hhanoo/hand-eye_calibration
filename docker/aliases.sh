@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # ROS env
 [ -f /opt/ros/humble/setup.bash ] && source /opt/ros/humble/setup.bash
 [ -f /ros2_ws/install/setup.bash ] && source /ros2_ws/install/setup.bash
@@ -10,6 +12,7 @@ alias doosan='ros2 launch dsr_pose_reader dsr_pose_reader.launch.py'
 alias build='cd /ros2_ws && colcon build --symlink-install && source install/setup.bash'
 alias cmd_help='echo; echo "[hand_eye_calibration] Commands: camera, gui, launch, doosan, build"'
 
+# Show help on interactive shell entry
 case $- in
     *i*) cmd_help ;;
 esac

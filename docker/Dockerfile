@@ -162,9 +162,12 @@ RUN rosdep init && rosdep update
 RUN echo "export PATH=/usr/local/cuda/bin:\$PATH" >> /root/.bashrc && \
     echo "export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH" >> /root/.bashrc
 
+# Developer HOME directory -------------------------------------------------
+RUN mkdir -p /home/developer && chmod 1777 /home/developer
+ENV HOME=/home/developer
+
 # Setup workspace ----------------------------------------------------------
 WORKDIR /ros2_ws
-RUN mkdir -p /ros2_ws/src
 
 # Aliases ---------------------------------------------------------------
 COPY ./aliases.sh /etc/profile.d/aliases.sh
