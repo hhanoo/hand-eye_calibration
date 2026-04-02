@@ -8,7 +8,7 @@
     Connects without requesting access control, so pendant operation is preserved.
   </description>
   <maintainer email="woo980711@gmail.com">hhanoo</maintainer>
-  <license>BSD-3-Clause</license>
+  <license>MIT</license>
 
   <!-- Build tool dependency (빌드 도구) -->
   <buildtool_depend>ament_cmake</buildtool_depend>

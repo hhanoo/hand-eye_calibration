@@ -7,7 +7,7 @@
 [![C++](https://img.shields.io/badge/C++-17-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.10-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)](docker/)
-[![License](https://img.shields.io/badge/License-BSD--3--Clause-orange?logo=opensourceinitiative&logoColor=white)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-F99304?logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 ---
 
@@ -675,7 +675,7 @@ echo $DISPLAY
 
 ## 라이선스
 
-이 프로젝트는 BSD-3-Clause 라이선스로 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+이 프로젝트는 MIT 라이선스로 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
 ---
 

@@ -19,7 +19,7 @@ setup(
     maintainer="hhanoo",
     maintainer_email="woo980711@gmail.com",
     description="Multi-robot hand-eye calibration tool with PyQt5 GUI",
-    license="BSD-3-Clause",
+    license="MIT",
     entry_points={
         "console_scripts": [
             "gui_node = hand_eye_calibration.gui_node:main",
