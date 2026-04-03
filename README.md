@@ -230,21 +230,18 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 ### Option 1: Docker (권장)
 
 ```bash
-# 1. Docker 이미지 빌드
-cd docker
-chmod +x build.sh run.sh
-./build.sh
+# 1. Docker 이미지 가져오기
+docker pull hhanoo/project:hand-eye-calibration-humble
 
-# 2. 컨테이너 실행
+# 2. 컨테이너 실행 (X11 포워딩 포함)
+cd Hand-eye_calibration/docker
 ./run.sh
 
-# 3. 컨테이너 내부에서 빌드
+# 3. 컨테이너 내부에서 실행
 cd /ros2_ws
 vcs import src < realsense.repos
 colcon build --symlink-install
 source install/setup.bash
-
-# 4. 실행
 ros2 launch hand_eye_calibration calibration.launch.py
 ```
 
@@ -317,20 +314,38 @@ ros2 launch hand_eye_calibration calibration.launch.py
 
 ## 설치
 
-### Docker (권장)
-
-Docker를 사용하면 모든 의존성이 자동으로 설치됩니다:
+### Method 1: Docker (권장)
 
 ```bash
-cd docker
-# 이미지 빌드
-./build.sh
+# 1. Docker 이미지 가져오기
+docker pull hhanoo/project:hand-eye-calibration-humble
 
-# 컨테이너 실행
+# 2. 컨테이너 실행
+cd Hand-eye_calibration/docker
 ./run.sh
 ```
 
-### Native
+<details>
+<summary>직접 빌드 (개발자용)</summary>
+
+```bash
+# 0. 프로젝트 루트로 이동
+cd Hand-eye_calibration/docker
+
+# 1. 설정 파일 생성 후 IMAGE_NAME을 로컬 이름으로 변경
+cp config.sh.example config.sh
+# config.sh에서 IMAGE_NAME="hand-eye-calibration-humble" 로 수정
+
+# 2. Docker 이미지 빌드
+./build.sh
+
+# 3. 컨테이너 실행
+./run.sh
+```
+
+</details>
+
+### Method 2: Native
 
 #### 1. 시스템 의존성
 
@@ -495,6 +510,19 @@ GUI 상단에서:
 ---
 
 ## 설정
+
+### Docker 설정
+
+[config.sh](docker/config.sh.example)
+
+```bash
+IMAGE_NAME="hhanoo/project:hand-eye-calibration-humble"  # Docker Hub 이미지 (기본값)
+CONTAINER_NAME="hand-eye-calibration-humble"              # Docker 컨테이너 이름
+```
+
+> `run.sh` 실행 전 `docker pull hhanoo/project:hand-eye-calibration-humble`로 이미지를 가져오세요.
+>
+> 직접 빌드하려면 `IMAGE_NAME`을 `"hand-eye-calibration-humble"` 등으로 변경 후 `./build.sh`를 실행하세요.
 
 ### hand_eye_calibration/config/default.yaml
 

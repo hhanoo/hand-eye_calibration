@@ -1,5 +1,7 @@
 # Docker image name (used in build.sh and run.sh)
-IMAGE_NAME="hand-eye-calibration-humble"
+# - Default: Docker Hub pre-built image
+# - For local build: change to "hand-eye-calibration-humble" and run ./build.sh
+IMAGE_NAME="hhanoo/project:hand-eye-calibration-humble"
 
 # Docker container name (used in run.sh)
 CONTAINER_NAME="hand-eye-calibration-humble"
