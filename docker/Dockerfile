@@ -69,11 +69,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-ament-cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Intel RealSense SDK ------------------------------------------------------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-realsense2-* \
-    && rm -rf /var/lib/apt/lists/*
-
 # Vision ROS2 Packages (cv_bridge, tf2, image_transport) -------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-image-transport \
@@ -95,7 +90,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-rviz2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Tool Dependencies (USB for RealSense) -----------------------------------
+# Tool Dependencies (USB for vision sensors) ------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libusb-1.0-0 \
     libusb-1.0-0-dev \
