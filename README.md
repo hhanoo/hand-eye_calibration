@@ -171,7 +171,8 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 │   ├── config.sh.example                       # Docker 공통 설정 (이미지명, ROS_DOMAIN_ID)
 │   ├── build.sh                                # Docker 이미지 빌드
 │   ├── run.sh                                  # Docker 컨테이너 실행
-│   ├── entrypoint.sh                           # ROS2 환경 설정
+│   ├── entrypoint.sh                           # ROS2 환경 설정 + RMW(CycloneDDS) 설정
+│   ├── cyclonedds.xml                          # CycloneDDS 튜닝 (대용량 센서 메시지용)
 │   └── aliases.sh                              # 컨테이너 내 alias 정의
 │
 └── src/
@@ -616,6 +617,21 @@ ORBBEC_COLOR_FPS=30                                       # Orbbec color 스트�
 >
 > 직접 빌드하려면 `IMAGE_NAME`을 `"hand-eye-calibration-humble"` 등으로 변경 후 `./build.sh`를 실행하세요.
 
+### DDS (CycloneDDS) 설정
+
+RealSense / Orbbec의 HD 프레임은 기본 Fast DDS에서 `"Sequence Size Exceeds remaining buffer"` 오류로 drop되는 경우가 있어, Docker 환경은 **CycloneDDS**를 기본 RMW로 사용합니다.
+
+- **[entrypoint.sh](docker/entrypoint.sh)**: 컨테이너 진입 시 `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, `CYCLONEDDS_URI=file:///etc/cyclonedds.xml` export
+- **[cyclonedds.xml](docker/cyclonedds.xml)**: RTPS 레벨에서 대용량 메시지 처리를 안정화하는 튜닝 값
+  - `MaxMessageSize=65500B` -- IP 레벨 fragmentation 대신 Cyclone이 직접 분할
+  - `SocketReceiveBufferSize min="10MB"` -- HD 프레임 burst 버퍼링
+- **[run.sh](docker/run.sh)**: 위 버퍼 값이 실제로 적용되도록 호스트 커널 sysctl 튜닝 수행 (`sudo` 필요)
+  - `net.core.rmem_max / wmem_max = 64MB`
+  - `net.ipv4.ipfrag_time=3`, `ipfrag_high_thresh=128MB`
+
+> Native 환경에서도 대용량 센서 메시지를 다룰 때는 동일한 RMW / sysctl 튜닝을 권장합니다.  
+> `sudo apt install ros-humble-rmw-cyclonedds-cpp` 후 위 환경변수를 export 하면 됩니다.
+
 ### hand_eye_calibration/config/default.yaml
 
 ```yaml
@@ -647,7 +663,7 @@ hand_eye_calibration:
 ```yaml
 dsr_pose_reader:
   ros__parameters:
-    robot_ip: "192.168.137.100" # Doosan 컨트롤러 IP
+    robot_ip: "192.168.137.101" # Doosan 컨트롤러 IP
     robot_port: 12345 # Doosan 컨트롤러 포트
     base_frame: "base_link" # TF base frame
     ee_frame: "tool0" # TF end-effector frame
@@ -801,6 +817,25 @@ echo $DISPLAY
 4. 컨테이너 재실행 후 launch 재시도
 
 Femto Bolt는 12V 외부 전원 어댑터가 필수입니다 (USB 버스 파워만으로는 부족).
+
+### 7. 대용량 센서 메시지 drop / `Sequence Size Exceeds remaining buffer`
+
+**증상:**
+
+RealSense / Orbbec HD 프레임 구독 시 Fast DDS가 메시지를 drop하거나 위 오류 로그 출력.
+
+**해결:**
+
+Docker 환경은 [설정 > DDS (CycloneDDS) 설정](#dds-cyclonedds-설정)에 따라 이미 CycloneDDS + sysctl 튜닝이 적용되어 있습니다. Native 환경이거나 `run.sh`를 거치지 않고 컨테이너를 실행한 경우 호스트에서 다음을 수동 적용하세요.
+
+```bash
+sudo sysctl -w net.core.rmem_max=67108864
+sudo sysctl -w net.core.wmem_max=67108864
+sudo sysctl -w net.ipv4.ipfrag_high_thresh=134217728
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file:///etc/cyclonedds.xml   # 또는 로컬 경로
+```
 
 ---
 
