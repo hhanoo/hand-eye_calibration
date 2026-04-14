@@ -1,7 +1,7 @@
 dsr_pose_reader:
   ros__parameters:
     # Doosan controller connection
-    robot_ip: "192.168.137.100"
+    robot_ip: "192.168.137.101"
     robot_port: 12345
 
     # TF frame names
