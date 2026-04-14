@@ -233,20 +233,23 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 # 1. Docker 이미지 가져오기
 docker pull hhanoo/project:hand-eye-calibration-humble
 
-# 2. 컨테이너 실행 (X11 포워딩 포함)
+# 2. (Orbbec 사용 시, 최초 1회) 호스트에서 udev rules 설치
+sudo bash src/OrbbecSDK_ROS2/orbbec_camera/scripts/install_udev_rules.sh
+sudo udevadm control --reload-rules && sudo udevadm trigger
+#     이후 카메라 USB를 뽑았다 다시 연결
+
+# 3. 컨테이너 실행 (X11 포워딩 포함)
 cd Hand-eye_calibration/docker
 ./run.sh
 
-# 3. 빌드 (컨테이너 내부)
-cd /ros2_ws
-colcon build --symlink-install
-source install/setup.bash
+# 4. 빌드 (컨테이너 내부) — build alias가 Release 빌드 + source를 함께 실행
+build
 
-# 4. 카메라와 GUI를 각각 실행 (터미널 2개)
+# 5. 카메라와 GUI를 각각 실행 (터미널 2개)
 #    터미널 1: 카메라 (RealSense 또는 Orbbec)
 camera_realsense          # 또는 camera_orbbec
-#    터미널 2: GUI
-gui
+#    터미널 2: GUI (사용 카메라에 맞춰 alias 선택)
+gui_realsense             # 또는 gui_orbbec
 ```
 
 > 센서별 launch 옵션·토픽은 [실행 > 개별 모듈](#개별-모듈) 참고.
@@ -257,9 +260,14 @@ gui
 
 ```bash
 rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install
+colcon build --symlink-install \
+  --event-handlers console_direct+ \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
+
+- `-DCMAKE_BUILD_TYPE=Release`: 전체 패키지를 `-O3 -DNDEBUG`로 최적화 빌드 (카메라 드라이버 실시간성 확보에 필수)
+- `--event-handlers console_direct+`: 빌드 로그를 실시간 스트림으로 출력 (오래 걸리는 C++ 패키지 진행 상황 확인)
 
 이후 카메라와 GUI를 각각 실행 — [실행 > 개별 모듈](#개별-모듈) 참고.
 
@@ -322,7 +330,13 @@ source install/setup.bash
 # 1. Docker 이미지 가져오기
 docker pull hhanoo/project:hand-eye-calibration-humble
 
-# 2. 컨테이너 실행
+# 2. (Orbbec 사용 시, 최초 1회) 호스트에서 udev rules 설치
+#    OrbbecSDK_ROS2는 컨테이너에서 소스 빌드되므로 udev rules는 호스트에서 수동 설치 필요
+sudo bash src/OrbbecSDK_ROS2/orbbec_camera/scripts/install_udev_rules.sh
+sudo udevadm control --reload-rules && sudo udevadm trigger
+#    이후 카메라 USB를 뽑았다 다시 연결
+
+# 3. 컨테이너 실행
 cd Hand-eye_calibration/docker
 ./run.sh
 ```
@@ -420,9 +434,13 @@ udev rules은 apt 패키지에 포함되어 자동 설치됨. 인식 불가 시 
 
 ```bash
 cd ~/ros2_ws
-colcon build --symlink-install
+colcon build --symlink-install \
+  --event-handlers console_direct+ \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
+
+`-DCMAKE_BUILD_TYPE=Release`는 워크스페이스 전체 패키지에 적용됩니다. Orbbec `OrbbecSDK_ROS2`는 Release 빌드가 특히 권장됩니다. `--event-handlers console_direct+`는 빌드 로그를 실시간 스트림으로 출력합니다.
 
 ### 특정 모듈 빌드
 
@@ -435,7 +453,9 @@ colcon build --symlink-install --packages-select dsr_pose_reader
 
 ```bash
 rm -rf build install log
-colcon build --symlink-install
+colcon build --symlink-install \
+  --event-handlers console_direct+ \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
 
@@ -469,12 +489,18 @@ ros2 launch orbbec_camera <model>.launch.py \
 
 - `<model>`: `femto_mega`, `femto_bolt`, `gemini2`, `gemini2L`, `gemini_330_series`, `astra2` 등
 - Docker: `camera_orbbec` alias 사용 (모델·해상도는 [config.sh](docker/config.sh.example)의 `ORBBEC_MODEL`, `ORBBEC_COLOR_*`로 지정)
-- 토픽 prefix가 RealSense와 다르므로 [config/default.yaml](src/hand_eye_calibration/config/default.yaml)의 `image_topic` / `camera_info_topic` 조정 필요
+- 토픽 prefix가 RealSense(`/camera/camera/color/...`)와 다르게 `/camera/color/...`로 퍼블리시됨. Docker alias `gui_orbbec`이 해당 토픽을 자동 오버라이드하여 구독 (Native 실행 시 아래 GUI 단독 실행 예시 참고)
 
 **GUI 단독 실행:**
 
 ```bash
+# RealSense (config/default.yaml의 토픽 그대로 사용)
 ros2 run hand_eye_calibration gui_node
+
+# Orbbec (토픽 prefix가 다르므로 파라미터 오버라이드)
+ros2 run hand_eye_calibration gui_node --ros-args \
+  -p image_topic:=/camera/color/image_raw \
+  -p camera_info_topic:=/camera/color/camera_info
 ```
 
 **UR 로봇 (UR Direct 모드):**
@@ -494,7 +520,7 @@ ros2 launch dsr_pose_reader dsr_pose_reader.launch.py config_file:=/path/to/cust
 
 # 터미널 2/3: 카메라 + GUI (위 "카메라" 항목 참고)
 camera_realsense   # 또는 camera_orbbec
-gui
+gui_realsense      # 또는 gui_orbbec
 ```
 
 ### Docker
@@ -503,13 +529,12 @@ gui
 cd docker
 ./run.sh
 
-# 컨테이너 내부
-cd /ros2_ws
-colcon build --symlink-install && source install/setup.bash
+# 컨테이너 내부 — build alias가 Release 빌드 + source를 함께 실행
+build
 
-# 카메라와 GUI를 별도 셸에서 실행
+# 카메라와 GUI를 별도 셸에서 실행 (사용 카메라에 맞춰 alias 선택)
 camera_realsense   # 또는 camera_orbbec
-gui
+gui_realsense      # 또는 gui_orbbec
 ```
 
 전체 alias 정의는 [aliases.sh](docker/aliases.sh)를 참고하세요.
@@ -518,9 +543,10 @@ gui
 | ------------------ | --------------------------- | ---------------------------------------------------------------------------------- |
 | `camera_realsense` | RealSense 카메라 실행       | —                                                                                  |
 | `camera_orbbec`    | Orbbec 카메라 실행          | `config.sh`의 `ORBBEC_MODEL` (모델), `ORBBEC_COLOR_WIDTH/HEIGHT/FPS` (해상도) 사용 |
-| `gui`              | GUI 실행                    | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)           |
+| `gui_realsense`    | GUI 실행 (RealSense 토픽)   | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)           |
+| `gui_orbbec`       | GUI 실행 (Orbbec 토픽)      | `image_topic` / `camera_info_topic` 파라미터를 `/camera/color/...`로 오버라이드    |
 | `doosan`           | Doosan 포즈 리더 실행       | [dsr_pose_reader.launch.py](src/dsr_pose_reader/launch/dsr_pose_reader.launch.py)  |
-| `build`            | 워크스페이스 빌드           | —                                                                                  |
+| `build`            | 워크스페이스 빌드           | Release 빌드 + `install/setup.bash` 적용                                           |
 | `cmd_help`         | 사용 가능한 alias 목록 출력 | 컨테이너 접속 시 자동 출력                                                         |
 
 ---
@@ -760,6 +786,21 @@ xhost +local:docker
 # DISPLAY 환경변수 확인
 echo $DISPLAY
 ```
+
+### 6. Orbbec 카메라 `Failed to get NVRAM data, timeout`
+
+**증상:**
+
+`list_devices_node`는 카메라를 정상적으로 찾지만, launch 직후 약 10초 뒤 타임아웃으로 프로세스가 종료됨.
+
+**해결 순서:**
+
+1. 호스트에서 OrbbecViewer 등 카메라를 점유 중인 프로세스 종료
+2. 컨테이너를 완전히 내림: `docker stop <name> && docker rm <name>`
+3. 카메라 USB + 12V 전원 어댑터 모두 뽑고 5초 후 재연결
+4. 컨테이너 재실행 후 launch 재시도
+
+Femto Bolt는 12V 외부 전원 어댑터가 필수입니다 (USB 버스 파워만으로는 부족).
 
 ---
 
