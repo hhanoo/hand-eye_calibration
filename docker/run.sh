@@ -18,12 +18,23 @@ if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
     exit 1
 fi
 
-# Enable X11 access for Docker
-echo "Enabling X11 access for Docker..."
-xhost +local:docker
+# [1/3] Host kernel tuning for ROS2 / CycloneDDS large sensor messages
+echo "==> [1/3] Tuning host kernel (rmem/wmem, ipfrag) for ROS2 DDS..."
+sudo sysctl -qw net.core.rmem_max=67108864
+sudo sysctl -qw net.core.rmem_default=67108864
+sudo sysctl -qw net.core.wmem_max=67108864
+sudo sysctl -qw net.core.wmem_default=67108864
+sudo sysctl -qw net.ipv4.ipfrag_time=3
+sudo sysctl -qw net.ipv4.ipfrag_high_thresh=134217728
 
-# Run the Docker container
-echo "Running Docker container from image: $IMAGE_NAME..."
+# [2/3] Enable X11 access for Docker
+echo "==> [2/3] Enabling X11 access for Docker (xhost +local:docker)..."
+xhost +local:docker > /dev/null 2>&1
+
+# [3/3] Run the Docker container
+echo "==> [3/3] Starting container '$CONTAINER_NAME' from image '$IMAGE_NAME'..."
+echo "---------- container output ----------"
+echo
 docker run -it --rm \
     --name "$CONTAINER_NAME" \
     --privileged \
@@ -42,10 +53,11 @@ docker run -it --rm \
     \
     "$IMAGE_NAME"
 
-# Fix file ownership after container exit
-echo "Restoring file ownership..."
+# Cleanup after container exit
+echo
+echo "---------- cleanup ----------"
+echo "[cleanup] Restoring workspace file ownership to $(id -un):$(id -gn)"
 sudo chown -R "$(id -u):$(id -g)" "$ROS2_WS_ROOT"
-
-# Disable X11 access after container exit
-echo "Disabling X11 access after container exit..."
-xhost -local:docker
+echo "[cleanup] Revoking X11 access (xhost -local:docker)"
+xhost -local:docker > /dev/null 2>&1
+echo "[cleanup] Done."

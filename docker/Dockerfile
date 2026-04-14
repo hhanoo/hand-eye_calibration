@@ -69,6 +69,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-ament-cmake \
     && rm -rf /var/lib/apt/lists/*
 
+# CycloneDDS RMW (preferred for large sensor messages) --------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    && rm -rf /var/lib/apt/lists/*
+
 # Vision ROS2 Packages (cv_bridge, tf2, image_transport) -------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-image-transport \
@@ -189,6 +194,9 @@ WORKDIR /ros2_ws
 COPY ./aliases.sh /etc/profile.d/aliases.sh
 RUN chmod 644 /etc/profile.d/aliases.sh && \
     echo 'source /etc/profile.d/aliases.sh' >> /etc/bash.bashrc
+
+# CycloneDDS configuration -------------------------------------------------
+COPY ./cyclonedds.xml /etc/cyclonedds.xml
 
 # Entrypoint ---------------------------------------------------------------
 COPY ./entrypoint.sh /entrypoint.sh
