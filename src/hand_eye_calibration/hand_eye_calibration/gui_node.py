@@ -8,6 +8,8 @@ import copy
 import io
 import os
 import sys
+import threading
+import time
 from datetime import datetime
 
 # Prevent OpenCV's bundled Qt from conflicting with PyQt5
@@ -20,6 +22,7 @@ from cv_bridge import CvBridge
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QThread, QTimer, pyqtSignal
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
 
 from .calibration import (
@@ -58,6 +61,8 @@ class CalibrationNode(Node):
         # Camera data
         self.cv_bridge = CvBridge()
         self.current_image = None
+        self.on_new_image = None
+        self.pending_display = False
         self.camera_matrix = None
         self.dist_coeffs = np.zeros(5, dtype=np.float32)
 
@@ -66,7 +71,7 @@ class CalibrationNode(Node):
         camera_info_topic = self.get_parameter("camera_info_topic").value
 
         self.image_sub = self.create_subscription(
-            Image, image_topic, self._image_callback, 10
+            Image, image_topic, self._image_callback, qos_profile_sensor_data
         )
         self.camera_info_sub = self.create_subscription(
             CameraInfo, camera_info_topic, self._camera_info_callback, 10
@@ -74,6 +79,9 @@ class CalibrationNode(Node):
 
     def _image_callback(self, msg):
         self.current_image = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
+        if self.on_new_image is not None and not self.pending_display:
+            self.pending_display = True
+            self.on_new_image()
 
     def _camera_info_callback(self, msg):
         self.camera_matrix = np.array(msg.k, dtype=np.float32).reshape(3, 3)
@@ -139,12 +147,22 @@ class CalibrationWorker(QThread):
 class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
     """PyQt5 GUI for hand-eye calibration."""
 
+    new_image_signal = pyqtSignal()
+
     def __init__(self, node: CalibrationNode):
         super().__init__()
         self.node = node
         self.pose_reader = None
         self.robot_T_list = []
         self.marker_T_list = []
+
+        self.new_image_signal.connect(self._update_camera_display)
+        self.node.on_new_image = self.new_image_signal.emit
+
+        # ArUco detection throttle: run detect every N frames, reuse last overlay between
+        self._frame_idx = 0
+        self._last_overlay = None
+        self.DETECT_EVERY = 2
 
         # ArUco detector
         grid_shape = tuple(node.get_parameter("board_grid_shape").value)
@@ -397,17 +415,14 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         layout.addWidget(tools_group, 0)  # stretch=0: fixed height
 
     def _start_timers(self):
-        # ROS2 spin
-        self.ros_timer = QTimer()
-        self.ros_timer.timeout.connect(
-            lambda: rclpy.spin_once(self.node, timeout_sec=0)
+        # ROS2 spin on a dedicated thread so callbacks (image, camera_info, TF)
+        # are processed immediately instead of being throttled by a Qt timer.
+        # Image callback emits new_image_signal across threads -> QueuedConnection
+        # posts _update_camera_display onto the Qt main event loop.
+        self._ros_spin_thread = threading.Thread(
+            target=rclpy.spin, args=(self.node,), daemon=True
         )
-        self.ros_timer.start(30)
-
-        # Camera display update
-        self.display_timer = QTimer()
-        self.display_timer.timeout.connect(self._update_camera_display)
-        self.display_timer.start(100)
+        self._ros_spin_thread.start()
 
     def _on_mode_changed(self, index):
         self.ur_direct_widgets.setVisible(index == 0)
@@ -450,35 +465,44 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
 
     def _update_camera_display(self):
         if self.node.current_image is None:
+            self.node.pending_display = False
             return
 
-        img = self.node.current_image.copy()
+        try:
+            img = self.node.current_image.copy()
+            self._frame_idx += 1
 
-        # Run ArUco detection for display
-        if self.node.camera_matrix is not None:
-            success, annotated, _ = self.aruco.detect(
-                img, self.node.camera_matrix, self.node.dist_coeffs
+            # Run ArUco detection every DETECT_EVERY frames; reuse last overlay in between
+            run_detect = (
+                self._frame_idx % self.DETECT_EVERY == 0
+                and self.node.camera_matrix is not None
             )
-            if success:
-                img = annotated
+            if run_detect:
+                success, annotated, _ = self.aruco.detect(
+                    img, self.node.camera_matrix, self.node.dist_coeffs
+                )
+                self._last_overlay = annotated if success else None
 
-        # Convert to QPixmap and display
-        h, w, c = img.shape
-        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        qimg = QtGui.QImage(rgb.data, w, h, w * c, QtGui.QImage.Format_RGB888)
-        scaled = QtGui.QPixmap.fromImage(qimg).scaled(
-            self.camera_label.size(),
-            QtCore.Qt.KeepAspectRatio,
-            QtCore.Qt.SmoothTransformation,
-        )
-        self.camera_label.setPixmap(scaled)
+            display_img = self._last_overlay if self._last_overlay is not None else img
+
+            # Convert to QPixmap and display
+            h, w, c = display_img.shape
+            rgb = cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB)
+            qimg = QtGui.QImage(rgb.data, w, h, w * c, QtGui.QImage.Format_RGB888)
+            scaled = QtGui.QPixmap.fromImage(qimg).scaled(
+                self.camera_label.size(),
+                QtCore.Qt.KeepAspectRatio,
+                QtCore.Qt.FastTransformation,
+            )
+            self.camera_label.setPixmap(scaled)
+        finally:
+            self.node.pending_display = False
 
     def _check_robot_stable(self, decimals=4):
         """로봇이 정지했는지 확인 (소수점 decimals자리 반올림 비교, 2회)."""
         try:
-            rclpy.spin_once(self.node, timeout_sec=0.05)
             prev = np.round(self.pose_reader.get_pose(), decimals)
-            rclpy.spin_once(self.node, timeout_sec=0.05)
+            time.sleep(0.05)
             curr = np.round(self.pose_reader.get_pose(), decimals)
         except Exception:
             return False
@@ -510,8 +534,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.result_text.setText("Robot is still moving! Wait until fully stopped.")
             return
 
-        # 2) Wait for fresh image frame
-        rclpy.spin_once(self.node, timeout_sec=0.5)
+        # 2) Background spin thread keeps current_image fresh; no explicit wait needed.
 
         # 3) Get robot pose and marker pose at the same moment
         try:
@@ -724,8 +747,6 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             dlg.update(self.robot_T_list, self.marker_T_list)
 
     def closeEvent(self, event):
-        self.ros_timer.stop()
-        self.display_timer.stop()
         if self.pose_reader is not None:
             self.pose_reader.disconnect()
         event.accept()
