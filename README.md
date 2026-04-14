@@ -197,8 +197,6 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
         ├── setup.py
         ├── config/
         │   └── default.yaml                    # ROS2 파라미터 (토픽, 마커, 로봇 설정)
-        ├── launch/
-        │   └── calibration.launch.py           # RealSense + GUI 동시 실행
         │
         └── hand_eye_calibration/               # Python 패키지
             ├── gui_node.py                     # 메인 ROS2 노드 + PyQt5 GUI
@@ -231,42 +229,39 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 
 ### Option 1: Docker (권장)
 
-1. Docker 이미지 가져오기
+```bash
+# 1. Docker 이미지 가져오기
+docker pull hhanoo/project:hand-eye-calibration-humble
 
-   ```bash
-   docker pull hhanoo/project:hand-eye-calibration-humble
-   ```
+# 2. 컨테이너 실행 (X11 포워딩 포함)
+cd Hand-eye_calibration/docker
+./run.sh
 
-2. 컨테이너 실행 (X11 포워딩 포함)
+# 3. 빌드 (컨테이너 내부)
+cd /ros2_ws
+colcon build --symlink-install
+source install/setup.bash
 
-   ```bash
-   cd Hand-eye_calibration/docker
-   ./run.sh
-   ```
+# 4. 카메라와 GUI를 각각 실행 (터미널 2개)
+#    터미널 1: 카메라 (RealSense 또는 Orbbec)
+camera_realsense          # 또는 camera_orbbec
+#    터미널 2: GUI
+gui
+```
 
-3. 컨테이너 내부에서 센서 드라이버 설치 → [설치 > 비전 센서별 추가 설치](#3-비전-센서별-추가-설치) 참고
-
-4. 빌드 & 실행
-
-   ```bash
-   cd /ros2_ws
-   colcon build --symlink-install
-   source install/setup.bash
-   ros2 launch hand_eye_calibration calibration.launch.py
-   ```
+> 센서별 launch 옵션·토픽은 [실행 > 개별 모듈](#개별-모듈) 참고.
 
 ### Option 2: Native
 
-1. 센서 드라이버 설치 → [설치 > 비전 센서별 추가 설치](#3-비전-센서별-추가-설치) 참고
+사용 센서의 드라이버를 먼저 설치 — 위 [설치 > Method 2 > 시스템 의존성](#1-시스템-의존성-센서-공통) 참고.
 
-2. 의존성 설치 & 빌드 & 실행
+```bash
+rosdep install --from-paths src --ignore-src -r -y
+colcon build --symlink-install
+source install/setup.bash
+```
 
-   ```bash
-   rosdep install --from-paths src --ignore-src -r -y
-   colcon build --symlink-install
-   source install/setup.bash
-   ros2 launch hand_eye_calibration calibration.launch.py
-   ```
+이후 카메라와 GUI를 각각 실행 — [실행 > 개별 모듈](#개별-모듈) 참고.
 
 ---
 
@@ -365,8 +360,6 @@ sudo apt install -y \
   ros-humble-image-transport
 ```
 
-> 센서별 추가 apt 패키지 / VCS import / udev rules는 아래 [비전 센서별 추가 설치](#3-비전-센서별-추가-설치) 섹션을 참고하세요.
-
 #### 2. Python 패키지
 
 ```bash
@@ -377,11 +370,9 @@ pip3 install \
   PyQt5 PyQt5-sip matplotlib
 ```
 
-### 3. 비전 센서별 추가 설치
+#### 3. 비전 센서별 추가 설치
 
-Docker 이미지는 센서 드라이버를 포함하지 않는다. 사용하는 비전 센서에 맞춰 apt 패키지를 설치한다 (Docker 컨테이너 내부 또는 Native 환경 공통).
-
-#### Intel RealSense (D415 / D435 등)
+##### Intel RealSense (D415 / D435 등)
 
 ```bash
 sudo apt update && sudo apt install -y ros-humble-realsense2-*
@@ -392,7 +383,7 @@ ros2 launch realsense2_camera rs_launch.py
 
 USB 3.0 연결 필수. 인식 불가 시 [문제 해결 > RealSense 카메라 인식 안 됨](#2-realsense-카메라-인식-안-됨) 참고.
 
-#### Orbbec (Femto Mega/Bolt, Gemini 2 / 330 시리즈 등)
+##### Orbbec (Femto Mega/Bolt, Gemini 2 / 330 시리즈 등)
 
 ```bash
 sudo apt update && sudo apt install -y \
@@ -452,26 +443,43 @@ source install/setup.bash
 
 ## 실행
 
-### 전체 시스템 (카메라 + GUI)
-
-```bash
-ros2 launch hand_eye_calibration calibration.launch.py
-```
+카메라와 GUI는 항상 별도 터미널(또는 alias)로 실행합니다. 사용하는 비전 센서마다 launch 명령이 다르기 때문에, 통합 launch 파일은 제공하지 않습니다.
 
 ### 개별 모듈
+
+**카메라: Intel RealSense (D415 / D435 등)**
+
+```bash
+ros2 launch realsense2_camera rs_launch.py \
+  rgb_camera.color_profile:=1280x720x30 \
+  depth_module.depth_profile:=1280x720x30 \
+  align_depth.enable:=true
+```
+
+- 토픽: `/camera/camera/color/image_raw`, `/camera/camera/color/camera_info`
+- Docker: `camera_realsense` alias로 동일 명령 실행
+
+**카메라: Orbbec (Femto Mega/Bolt, Gemini 2 / 330 시리즈 등)**
+
+```bash
+ros2 run orbbec_camera list_devices_node                # 장치 인식 확인
+ros2 launch orbbec_camera <model>.launch.py \
+  color_width:=1280 color_height:=720 color_fps:=30
+```
+
+- `<model>`: `femto_mega`, `femto_bolt`, `gemini2`, `gemini2L`, `gemini_330_series`, `astra2` 등
+- Docker: `camera_orbbec` alias 사용 (모델·해상도는 [config.sh](docker/config.sh.example)의 `ORBBEC_MODEL`, `ORBBEC_COLOR_*`로 지정)
+- 토픽 prefix가 RealSense와 다르므로 [config/default.yaml](src/hand_eye_calibration/config/default.yaml)의 `image_topic` / `camera_info_topic` 조정 필요
+
+**GUI 단독 실행:**
+
+```bash
+ros2 run hand_eye_calibration gui_node
+```
 
 **UR 로봇 (UR Direct 모드):**
 
 GUI에서 UR Direct 모드로 직접 연결하므로 별도 드라이버가 필요 없습니다.
-
-```bash
-# 카메라와 GUI를 따로 실행
-ros2 launch realsense2_camera rs_launch.py \
-  depth_module.depth_profile:=1280x720x30 \
-  rgb_camera.color_profile:=1280x720x30 \
-  align_depth.enable:=true
-ros2 run hand_eye_calibration gui_node
-```
 
 **Doosan 로봇 (dsr_pose_reader + ROS2 TF 모드):**
 
@@ -484,8 +492,9 @@ ros2 launch dsr_pose_reader dsr_pose_reader.launch.py
 # 커스텀 yaml 지정
 ros2 launch dsr_pose_reader dsr_pose_reader.launch.py config_file:=/path/to/custom.yaml
 
-# 터미널 2: 카메라 + GUI
-ros2 launch hand_eye_calibration calibration.launch.py
+# 터미널 2/3: 카메라 + GUI (위 "카메라" 항목 참고)
+camera_realsense   # 또는 camera_orbbec
+gui
 ```
 
 ### Docker
@@ -494,27 +503,25 @@ ros2 launch hand_eye_calibration calibration.launch.py
 cd docker
 ./run.sh
 
-# 컨테이너 내부 (센서 드라이버는 [설치 > 비전 센서별 추가 설치] 참고)
+# 컨테이너 내부
 cd /ros2_ws
 colcon build --symlink-install && source install/setup.bash
-launch   # 카메라 + GUI 동시 실행
-```
 
-> 현재 `launch` alias가 호출하는 [calibration.launch.py](src/hand_eye_calibration/launch/calibration.launch.py)는 RealSense 드라이버를 하드코딩으로 포함한다.
->
-> Orbbec 환경에서는 `camera_orbbec`과 `gui`를 각각 실행하거나, launch 파일을 센서에 맞게 수정해야 한다.
+# 카메라와 GUI를 별도 셸에서 실행
+camera_realsense   # 또는 camera_orbbec
+gui
+```
 
 전체 alias 정의는 [aliases.sh](docker/aliases.sh)를 참고하세요.
 
-| Alias              | 설명                        | 참고                                                                                            |
-| ------------------ | --------------------------- | ----------------------------------------------------------------------------------------------- |
-| `camera_realsense` | RealSense 카메라 실행       | —                                                                                               |
+| Alias              | 설명                        | 참고                                                                               |
+| ------------------ | --------------------------- | ---------------------------------------------------------------------------------- |
+| `camera_realsense` | RealSense 카메라 실행       | —                                                                                  |
 | `camera_orbbec`    | Orbbec 카메라 실행          | `config.sh`의 `ORBBEC_MODEL` (모델), `ORBBEC_COLOR_WIDTH/HEIGHT/FPS` (해상도) 사용 |
-| `gui`              | GUI 실행                    | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)                        |
-| `launch`           | 카메라 + GUI 동시 실행      | [calibration.launch.py](src/hand_eye_calibration/launch/calibration.launch.py) — RealSense 전용 |
-| `doosan`           | Doosan 포즈 리더 실행       | [dsr_pose_reader.launch.py](src/dsr_pose_reader/launch/dsr_pose_reader.launch.py)               |
-| `build`            | 워크스페이스 빌드           | —                                                                                               |
-| `cmd_help`         | 사용 가능한 alias 목록 출력 | 컨테이너 접속 시 자동 출력                                                                      |
+| `gui`              | GUI 실행                    | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)           |
+| `doosan`           | Doosan 포즈 리더 실행       | [dsr_pose_reader.launch.py](src/dsr_pose_reader/launch/dsr_pose_reader.launch.py)  |
+| `build`            | 워크스페이스 빌드           | —                                                                                  |
+| `cmd_help`         | 사용 가능한 alias 목록 출력 | 컨테이너 접속 시 자동 출력                                                         |
 
 ---
 
@@ -632,10 +639,6 @@ dsr_pose_reader:
 | `robot_mode`        | string | "ur_direct" | 로봇 포즈 획득 방식 ("ur_direct" / "ros2_tf")          |
 
 ### Launch 인자
-
-**calibration.launch.py:**
-
-런타임 Launch 인자 없음. 카메라 해상도 등의 설정은 launch 파일 내부에 고정되어 있습니다.
 
 **dsr_pose_reader.launch.py:**
 

@@ -80,6 +80,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-rclpy \
     && rm -rf /var/lib/apt/lists/*
 
+# Intel RealSense SDK ------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-realsense2-* \
+    && rm -rf /var/lib/apt/lists/*
+
+# Orbbec SDK ---------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-orbbec-camera \
+    ros-${ROS_DISTRO}-orbbec-description \
+    && rm -rf /var/lib/apt/lists/*
+
 # Robot Description and Visualization -------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-urdf \
