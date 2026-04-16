@@ -56,8 +56,11 @@ docker run -it --rm \
 # Cleanup after container exit
 echo
 echo "---------- cleanup ----------"
-echo "[cleanup] Restoring workspace file ownership to $(id -un):$(id -gn)"
+
+# Fix file ownership after container exit
+echo "==> [1/2] Restoring workspace file ownership to $(id -un):$(id -gn)"
 sudo chown -R "$(id -u):$(id -g)" "$ROS2_WS_ROOT"
-echo "[cleanup] Revoking X11 access (xhost -local:docker)"
+
+# Disable X11 access after container exit
+echo "==> [2/2] Disabling X11 access after container exit..."
 xhost -local:docker > /dev/null 2>&1
-echo "[cleanup] Done."
