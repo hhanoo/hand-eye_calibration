@@ -173,7 +173,7 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 │   ├── run.sh                                  # Docker 컨테이너 실행
 │   ├── entrypoint.sh                           # ROS2 환경 설정 + RMW(CycloneDDS) 설정
 │   ├── cyclonedds.xml                          # CycloneDDS 튜닝 (대용량 센서 메시지용)
-│   └── aliases.sh                              # 컨테이너 내 alias 정의
+│   └── commands.sh                             # 컨테이너 내 명령어 함수 정의 (build, camera-*, gui-*, doosan)
 │
 └── src/
     ├── (camera driver)                         # VCS로 가져옴: realsense-ros 또는 OrbbecSDK_ROS2
@@ -243,14 +243,14 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 cd Hand-eye_calibration/docker
 ./run.sh
 
-# 4. 빌드 (컨테이너 내부) — build alias가 Release 빌드 + source를 함께 실행
+# 4. 빌드 (컨테이너 내부) — build 함수가 Release 빌드 + source를 함께 실행
 build
 
-# 5. 카메라와 GUI를 각각 실행 (터미널 2개)
+# 5. 카메라와 GUI를 각각 실행 (터미널 2개, 추가 셸은 ./run.sh 재실행으로 attach)
 #    터미널 1: 카메라 (RealSense 또는 Orbbec)
-camera_realsense          # 또는 camera_orbbec
-#    터미널 2: GUI (사용 카메라에 맞춰 alias 선택)
-gui_realsense             # 또는 gui_orbbec
+camera-realsense          # 또는 camera-orbbec
+#    터미널 2: GUI (사용 카메라에 맞춰 함수 선택)
+gui-realsense             # 또는 gui-orbbec
 ```
 
 > 센서별 launch 옵션·토픽은 [실행 > 개별 모듈](#개별-모듈) 참고.
@@ -423,9 +423,9 @@ udev rules은 apt 패키지에 포함되어 자동 설치됨. 인식 불가 시 
 | Gemini 330 / 335 / 336 시리즈 | `gemini_330_series.launch.py` |
 | Astra 2                       | `astra2.launch.py`            |
 
-> Docker 사용 시 [설정 > Docker 설정](#docker-설정)의 `ORBBEC_MODEL`을 사용 모델로 지정하면 컨테이너 내부에서 `camera_orbbec` alias로 바로 실행 가능.
+> Docker 사용 시 [설정 > Docker 설정](#docker-설정)의 `ORBBEC_MODEL`을 사용 모델로 지정하면 컨테이너 내부에서 `camera-orbbec` 함수로 바로 실행 가능.
 >
-> 특정 버전 핀 고정이나 최신 소스 빌드가 필요한 경우 `camera_realsense.repos` / `camera_orbbec.repos`를 이용한 `vcs import` + `colcon build` 방식도 사용 가능.
+> 특정 버전 고정이나 최신 소스 빌드가 필요한 경우 `camera_realsense.repos` / `camera_orbbec.repos`를 이용한 `vcs import` + `colcon build` 방식도 사용 가능.
 
 ---
 
@@ -466,7 +466,7 @@ source install/setup.bash
 
 카메라와 GUI는 항상 별도 터미널(또는 alias)로 실행합니다. 사용하는 비전 센서마다 launch 명령이 다르기 때문에, 통합 launch 파일은 제공하지 않습니다.
 
-### 개별 모듈
+### 개별 모듈 실행
 
 **카메라: Intel RealSense (D415 / D435 등)**
 
@@ -478,7 +478,7 @@ ros2 launch realsense2_camera rs_launch.py \
 ```
 
 - 토픽: `/camera/camera/color/image_raw`, `/camera/camera/color/camera_info`
-- Docker: `camera_realsense` alias로 동일 명령 실행
+- Docker: `camera-realsense` 함수로 동일 명령 실행
 
 **카메라: Orbbec (Femto Mega/Bolt, Gemini 2 / 330 시리즈 등)**
 
@@ -489,8 +489,8 @@ ros2 launch orbbec_camera <model>.launch.py \
 ```
 
 - `<model>`: `femto_mega`, `femto_bolt`, `gemini2`, `gemini2L`, `gemini_330_series`, `astra2` 등
-- Docker: `camera_orbbec` alias 사용 (모델·해상도는 [config.sh](docker/config.sh.example)의 `ORBBEC_MODEL`, `ORBBEC_COLOR_*`로 지정)
-- 토픽 prefix가 RealSense(`/camera/camera/color/...`)와 다르게 `/camera/color/...`로 퍼블리시됨. Docker alias `gui_orbbec`이 해당 토픽을 자동 오버라이드하여 구독 (Native 실행 시 아래 GUI 단독 실행 예시 참고)
+- Docker: `camera-orbbec` 함수 사용 (모델·해상도는 [config.sh](docker/config.sh.example)의 `ORBBEC_MODEL`, `ORBBEC_COLOR_*`로 지정)
+- 토픽 prefix가 RealSense(`/camera/camera/color/...`)와 다르게 `/camera/color/...`로 퍼블리시됨. Docker 함수 `gui-orbbec`이 해당 토픽을 자동 오버라이드하여 구독 (Native 실행 시 아래 GUI 단독 실행 예시 참고)
 
 **GUI 단독 실행:**
 
@@ -520,35 +520,38 @@ ros2 launch dsr_pose_reader dsr_pose_reader.launch.py
 ros2 launch dsr_pose_reader dsr_pose_reader.launch.py config_file:=/path/to/custom.yaml
 
 # 터미널 2/3: 카메라 + GUI (위 "카메라" 항목 참고)
-camera_realsense   # 또는 camera_orbbec
-gui_realsense      # 또는 gui_orbbec
+camera-realsense   # 또는 camera-orbbec
+gui-realsense      # 또는 gui-orbbec
 ```
 
-### Docker
+### Docker 실행
+
+> **권장**: 직접 `docker exec`로 컨테이너에 진입하지 말고 항상 [run.sh](docker/run.sh)를 사용하세요.  
+> `run.sh`는 도커 이미지 확인 · X11 권한 · 마운트 · 호스트 권한 복원(`HOST_UID`/`HOST_GID`) · 기존 컨테이너 재사용을 한 번에 처리합니다.
 
 ```bash
 cd docker
 ./run.sh
 
-# 컨테이너 내부 — build alias가 Release 빌드 + source를 함께 실행
+# 컨테이너 내부 — build 함수가 Release 빌드 + source를 함께 실행
 build
 
-# 카메라와 GUI를 별도 셸에서 실행 (사용 카메라에 맞춰 alias 선택)
-camera_realsense   # 또는 camera_orbbec
-gui_realsense      # 또는 gui_orbbec
+# 카메라와 GUI를 별도 셸에서 실행 (추가 셸은 ./run.sh 재실행으로 attach)
+camera-realsense   # 또는 camera-orbbec
+gui-realsense      # 또는 gui-orbbec
 ```
 
-전체 alias 정의는 [aliases.sh](docker/aliases.sh)를 참고하세요.
+전체 명령어 정의는 [commands.sh](docker/commands.sh)를 참고하세요.
 
-| Alias              | 설명                        | 참고                                                                               |
-| ------------------ | --------------------------- | ---------------------------------------------------------------------------------- |
-| `camera_realsense` | RealSense 카메라 실행       | —                                                                                  |
-| `camera_orbbec`    | Orbbec 카메라 실행          | `config.sh`의 `ORBBEC_MODEL` (모델), `ORBBEC_COLOR_WIDTH/HEIGHT/FPS` (해상도) 사용 |
-| `gui_realsense`    | GUI 실행 (RealSense 토픽)   | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)           |
-| `gui_orbbec`       | GUI 실행 (Orbbec 토픽)      | `image_topic` / `camera_info_topic` 파라미터를 `/camera/color/...`로 오버라이드    |
-| `doosan`           | Doosan 포즈 리더 실행       | [dsr_pose_reader.launch.py](src/dsr_pose_reader/launch/dsr_pose_reader.launch.py)  |
-| `build`            | 워크스페이스 빌드           | Release 빌드 + `install/setup.bash` 적용                                           |
-| `cmd_help`         | 사용 가능한 alias 목록 출력 | 컨테이너 접속 시 자동 출력                                                         |
+| Command            | 설명                         | 참고                                                                               |
+| ------------------ | ---------------------------- | ---------------------------------------------------------------------------------- |
+| `camera-realsense` | RealSense 카메라 실행        | —                                                                                  |
+| `camera-orbbec`    | Orbbec 카메라 실행           | `config.sh`의 `ORBBEC_MODEL` (모델), `ORBBEC_COLOR_WIDTH/HEIGHT/FPS` (해상도) 사용 |
+| `gui-realsense`    | GUI 실행 (RealSense 토픽)    | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)           |
+| `gui-orbbec`       | GUI 실행 (Orbbec 토픽)       | `image_topic` / `camera_info_topic` 파라미터를 `/camera/color/...`로 오버라이드    |
+| `doosan`           | Doosan 포즈 리더 실행        | [dsr_pose_reader.launch.py](src/dsr_pose_reader/launch/dsr_pose_reader.launch.py)  |
+| `build`            | 워크스페이스 빌드            | Release 빌드 + `install/setup.bash` 적용                                           |
+| `cmd-help`         | 사용 가능한 명령어 목록 출력 | 컨테이너 접속 시 자동 출력                                                         |
 
 ---
 
@@ -606,7 +609,8 @@ GUI 상단에서:
 IMAGE_NAME="hhanoo/project:hand-eye-calibration-humble"  # Docker Hub 이미지 (기본값)
 CONTAINER_NAME="hand-eye-calibration-humble"              # Docker 컨테이너 이름
 ROS_DOMAIN_ID=98                                          # ROS2 domain
-ORBBEC_MODEL="femto_bolt"                                 # camera_orbbec alias가 실행할 Orbbec 모델
+XAUTHORITY_PATH="$HOME/.Xauthority"                       # 호스트의 .Xauthority (Qt GUI / RViz 표시용)
+ORBBEC_MODEL="femto_bolt"                                 # camera-orbbec 함수가 실행할 Orbbec 모델
                                                           # (femto_mega, femto_bolt, gemini2, gemini2L, gemini_330_series 등)
 ORBBEC_COLOR_WIDTH=1280                                   # Orbbec color 스트림 너비
 ORBBEC_COLOR_HEIGHT=720                                   # Orbbec color 스트림 높이

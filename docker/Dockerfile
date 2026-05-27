@@ -190,10 +190,10 @@ ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 # Setup workspace -----------------------------------------------------------
 WORKDIR /ros2_ws
 
-# Aliases ---------------------------------------------------------------
-COPY ./aliases.sh /etc/profile.d/aliases.sh
-RUN chmod 644 /etc/profile.d/aliases.sh && \
-    echo 'source /etc/profile.d/aliases.sh' >> /etc/bash.bashrc
+# Commands --------------------------------------------------------------
+COPY ./commands.sh /etc/profile.d/commands.sh
+RUN chmod 644 /etc/profile.d/commands.sh && \
+    echo 'source /etc/profile.d/commands.sh' >> /etc/bash.bashrc
 
 # CycloneDDS configuration -------------------------------------------------
 COPY ./cyclonedds.xml /etc/cyclonedds.xml

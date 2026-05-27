@@ -9,7 +9,11 @@ CONTAINER_NAME="hand-eye-calibration-humble"
 # ROS 2 domain ID for network isolation (used in run.sh)
 ROS_DOMAIN_ID=98
 
-# Orbbec camera settings (used by `camera_orbbec` alias inside container)
+# X11 .Xauthority path on host (used in run.sh)
+# - Mounted into container as /root/.Xauthority for Qt GUI / RViz display.
+XAUTHORITY_PATH="$HOME/.Xauthority"
+
+# Orbbec camera settings (used by `camera-orbbec` function inside container)
 # - ORBBEC_MODEL: femto_mega, femto_bolt, gemini2, gemini2L, gemini_330_series, astra2, ...
 # - Color resolution/fps: 1280x720@30 is supported by most models. Check the
 #   device datasheet for supported combinations (e.g. Femto Bolt up to 4096x3072).
