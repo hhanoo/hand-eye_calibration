@@ -1,22 +1,26 @@
-# Ubuntu Release -----------------------------------------------------------
+# =========================================================================
+# Base Image (NVIDIA CUDA + Ubuntu)
+# =========================================================================
+# - https://catalog.ngc.nvidia.com/orgs/nvidia/containers/cuda
 ARG UBUNTU_RELEASE=22.04
-
-# CUDA Release ------------------------------------------------------------
 ARG CUDA_VERSION=12.5.1
 ARG CUDA_RELEASE=12.5
 ARG CUDA_PURPOSE=devel
 ARG CUDNN_VERSION=""
 
-# CUDA Docker Image Download -----------------------------------------------
 FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-${CUDNN_VERSION}${CUDA_PURPOSE}-ubuntu${UBUNTU_RELEASE}
 
-# Non-interactive mode, NVIDIA settings ------------------------------------
-ENV DEBIAN_FRONTEND=noninteractive
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=all
-ENV XDG_RUNTIME_DIR=/tmp/runtime-root
+# - Build dependencies
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Locale and Font Settings -------------------------------------------------
+# - NVIDIA runtime settings
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=all \
+    XDG_RUNTIME_DIR=/tmp/runtime-root
+
+# =========================================================================
+# Locale and Font
+# =========================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     locales \
     fonts-noto-color-emoji \
@@ -28,89 +32,69 @@ ENV LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
     LC_ALL=en_US.UTF-8
 
-# Essential Packages -------------------------------------------------------
+# =========================================================================
+# Essential Packages
+# =========================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-transport-https \
     apt-utils \
-    build-essential \
     ca-certificates \
-    cmake \
     curl \
     git \
     gnupg2 \
     lsb-release \
-    python3-pip \
     software-properties-common \
     sudo \
-    terminator \
-    vim \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# ROS2 Humble Repository Setup --------------------------------------------
+# =========================================================================
+# ROS2
+# =========================================================================
+# - ROS2 repository setup
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     -o /usr/share/keyrings/ros-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
     http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
     > /etc/apt/sources.list.d/ros2.list
 
-# ROS2 Humble Installation ------------------------------------------------
+# - ROS2 setup
 ARG ROS_VERSION=humble
 ENV ROS_DISTRO=${ROS_VERSION}
+
+# - ROS2 Desktop + dev tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-desktop \
     ros-dev-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# ROS2 Control Dependencies -----------------------------------------------
+# - ROS2 Control
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-ros2-control \
     ros-${ROS_DISTRO}-ros2-controllers \
     ros-${ROS_DISTRO}-ament-cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# CycloneDDS RMW (preferred for large sensor messages) --------------------
+# - ROS2 CycloneDDS RMW (preferred for large sensor messages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-# Vision ROS2 Packages (cv_bridge, tf2, image_transport) -------------------
+# - ROS2 Vision / Image transport (generic, shared by GUI node & camera drivers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-image-transport \
     ros-${ROS_DISTRO}-cv-bridge \
-    ros-${ROS_DISTRO}-camera-info-manager \
     ros-${ROS_DISTRO}-vision-opencv \
     ros-${ROS_DISTRO}-sensor-msgs \
     ros-${ROS_DISTRO}-tf2-ros \
     ros-${ROS_DISTRO}-rclpy \
-    && rm -rf /var/lib/apt/lists/*
-
-# Intel RealSense SDK ------------------------------------------------------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-realsense2-* \
-    && rm -rf /var/lib/apt/lists/*
-
-# Orbbec SDK ---------------------------------------------------------------
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgflags-dev nlohmann-json3-dev \
     ros-${ROS_DISTRO}-image-transport \
     ros-${ROS_DISTRO}-image-transport-plugins \
     ros-${ROS_DISTRO}-compressed-image-transport \
     ros-${ROS_DISTRO}-image-publisher \
     ros-${ROS_DISTRO}-camera-info-manager \
-    ros-${ROS_DISTRO}-diagnostic-updater \
-    ros-${ROS_DISTRO}-diagnostic-msgs \
-    ros-${ROS_DISTRO}-statistics-msgs \
-    ros-${ROS_DISTRO}-xacro \
-    ros-${ROS_DISTRO}-backward-ros \
-    libdw-dev \
-    libssl-dev \
-    mesa-utils \
-    libgl1 \
-    libgoogle-glog-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Robot Description and Visualization -------------------------------------
+# - ROS2 Robot Description / Visualization
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-urdf \
     ros-${ROS_DISTRO}-xacro \
@@ -120,20 +104,80 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-rviz2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Tool Dependencies (USB for vision sensors) ------------------------------
+# =========================================================================
+# Vision Sensor: Intel RealSense (D415 / D435 / D455 etc.)
+# =========================================================================
+# - Driver installed via apt (precompiled binary)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libusb-1.0-0 \
-    libusb-1.0-0-dev \
-    udev \
+    ros-${ROS_DISTRO}-realsense2-* \
     && rm -rf /var/lib/apt/lists/*
 
-# Vision Dependencies (C++) -----------------------------------------------
+# =========================================================================
+# Vision Sensor: Orbbec (Femto Mega/Bolt, Gemini 2 / 330 series etc.)
+# =========================================================================
+# - OrbbecSDK_ROS2 is built from source via VCS; install build/runtime deps
+# - ros-* runtime msgs : diagnostic-updater/msgs, statistics-msgs, backward-ros
+# - C/C++ build deps    : libgflags-dev, nlohmann-json3-dev,
+#                         libdw-dev (backward-ros), libssl-dev,
+#                         libgoogle-glog-dev
+# - GL runtime          : mesa-utils, libgl1 (SDK sample/preview)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libeigen3-dev \
-    libopencv-dev \
+    ros-${ROS_DISTRO}-diagnostic-updater \
+    ros-${ROS_DISTRO}-diagnostic-msgs \
+    ros-${ROS_DISTRO}-statistics-msgs \
+    ros-${ROS_DISTRO}-backward-ros \
+    libgflags-dev \
+    nlohmann-json3-dev \
+    libdw-dev \
+    libssl-dev \
+    libgoogle-glog-dev \
+    mesa-utils \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# GUI / OpenGL / GPU Packages (for PyQt5 display) -------------------------
+# =========================================================================
+# Python
+# =========================================================================
+# - Python base
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-vcstool \
+    python3-rosdep \
+    && rm -rf /var/lib/apt/lists/*
+
+# - pip / setuptools (ROS2-compatible versions)
+RUN python3 -m pip install --no-cache-dir --upgrade \
+    pip \
+    setuptools==58.2.0 \
+    packaging==21.3 \
+    wheel
+
+# - Python dependencies for Hand-Eye Calibration
+RUN python3 -m pip install --no-cache-dir \
+    'numpy>=1.21.0,<2.0' \
+    scipy \
+    sympy \
+    opencv-contrib-python-headless==4.10.0.84 \
+    PyQt5 \
+    PyQt5-sip \
+    matplotlib
+
+# =========================================================================
+# Development Tools
+# =========================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    pkg-config \
+    terminator \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+# =========================================================================
+# GUI / OpenGL (for PyQt5 display)
+# =========================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     libgl1-mesa-dri \
@@ -144,64 +188,58 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     libxinerama1 \
     libxcursor1 \
-    mesa-utils \
     x11-apps \
     && rm -rf /var/lib/apt/lists/*
 
-# Python base --------------------------------------------------------------
+# =========================================================================
+# C++ Build Dependencies
+# =========================================================================
+# - libeigen3-dev    : hand_eye_calibration, dsr_pose_reader
+# - libopencv-dev    : hand_eye_calibration (ArUco)
+# - libusb-1.0-0-dev : realsense2-camera, OrbbecSDK_ROS2
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-dev \
-    python3-vcstool \
-    python3-rosdep \
+    libeigen3-dev \
+    libopencv-dev \
+    libusb-1.0-0 \
+    libusb-1.0-0-dev \
+    udev \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install ROS2-compatible setuptools -----------------------
-RUN python3 -m pip install --no-cache-dir --upgrade \
-    pip \
-    setuptools==58.2.0 \
-    packaging==21.3 \
-    wheel
-
-# Python Dependencies for Hand-Eye Calibration ----------------------------
-RUN python3 -m pip install --no-cache-dir \
-    'numpy>=1.21.0,<2.0' \
-    scipy \
-    sympy \
-    opencv-contrib-python-headless==4.10.0.84 \
-    PyQt5 \
-    PyQt5-sip \
-    matplotlib
-
-# USB device access groups -------------------------------------------------
+# =========================================================================
+# Runtime Setup
+# =========================================================================
+# - USB device access groups (plugdev/dialout/video for vision sensors)
 RUN groupadd -f plugdev && \
     groupadd -f dialout && \
     usermod -aG plugdev root && \
     usermod -aG dialout root && \
     usermod -aG video root
 
-# rosdep initialization ---------------------------------------------------
+# - rosdep initialization
 RUN rosdep init && rosdep update
 
-# CUDA PATH environment variables -----------------------------------------
-ENV PATH=/usr/local/cuda/bin:${PATH}
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+# - CUDA PATH
+ENV PATH=/usr/local/cuda/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 
-# Setup workspace -----------------------------------------------------------
+# =========================================================================
+# Workspace Setup
+# =========================================================================
+# - Workspace
 WORKDIR /ros2_ws
 
-# Commands --------------------------------------------------------------
+# - Commands
 COPY ./commands.sh /etc/profile.d/commands.sh
 RUN chmod 644 /etc/profile.d/commands.sh && \
     echo 'source /etc/profile.d/commands.sh' >> /etc/bash.bashrc
 
-# CycloneDDS configuration -------------------------------------------------
+# - CycloneDDS configuration
 COPY ./cyclonedds.xml /etc/cyclonedds.xml
 
-# Entrypoint ---------------------------------------------------------------
+# - Entrypoint
 COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
-# Default command ----------------------------------------------------------
+# - Default command
 CMD ["bash"]
