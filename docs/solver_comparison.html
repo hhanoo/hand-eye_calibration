@@ -1,0 +1,563 @@
+<title>AX = YB — 변수 배치와 세 솔버의 풀이 방식</title>
+<style>
+  :root {
+    --bg: #F6F7F9;
+    --panel: #FFFFFF;
+    --ink: #212832;
+    --sub: #5A6472;
+    --line: #DCE1E8;
+    --robot: #3D6B9E;
+    --cam: #1F7D72;
+    --unk: #7A5EA8;
+    --noise: #C2453C;
+    --ok: #2E7D5B;
+    --warn: #A66A1F;
+    --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #13171C; --panel: #1A2028; --ink: #DEE4EB; --sub: #93A0AF; --line: #2C3540;
+      --robot: #6FA1D6; --cam: #4BB3A6; --unk: #A98FD6; --noise: #E06A60; --ok: #5CB58C; --warn: #D9A050;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #13171C; --panel: #1A2028; --ink: #DEE4EB; --sub: #93A0AF; --line: #2C3540;
+    --robot: #6FA1D6; --cam: #4BB3A6; --unk: #A98FD6; --noise: #E06A60; --ok: #5CB58C; --warn: #D9A050;
+  }
+  :root[data-theme="light"] {
+    --bg: #F6F7F9; --panel: #FFFFFF; --ink: #212832; --sub: #5A6472; --line: #DCE1E8;
+    --robot: #3D6B9E; --cam: #1F7D72; --unk: #7A5EA8; --noise: #C2453C; --ok: #2E7D5B; --warn: #A66A1F;
+  }
+
+  html { background: var(--bg); }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    font-size: 15.5px; line-height: 1.75; margin: 0; -webkit-font-smoothing: antialiased;
+    /* 한글은 기본적으로 음절마다 끊기므로 어절 단위로 묶는다 */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  .wrap { max-width: 840px; margin: 0 auto; padding: 56px 24px 96px; }
+
+  header.page { margin-bottom: 56px; }
+  .kicker { font-size: 12px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--sub); margin-bottom: 14px; }
+  h1 { font-size: 30px; font-weight: 750; line-height: 1.35; letter-spacing: -0.015em; margin: 0 0 16px; text-wrap: balance; }
+  .lede { color: var(--sub); margin: 0; }
+  .lede strong { color: var(--ink); font-weight: 650; }
+
+  section { margin-bottom: 64px; }
+  .eyebrow { font-size: 12px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--noise); margin-bottom: 8px; }
+  h2 { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 14px; text-wrap: balance; }
+  /* 본문 폭을 표·패널과 맞춘다 (별도 max-width를 두지 않음) */
+  p { margin: 0 0 14px; }
+  p.note { font-size: 13.5px; color: var(--sub); }
+  code.ref {
+    font-family: var(--mono); font-size: 12.5px;
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    border-radius: 5px; padding: 1.5px 6px; white-space: nowrap;
+  }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; margin: 20px 0; }
+  .panel .caption { font-size: 13px; color: var(--sub); margin: 14px 0 0; }
+  .scroll { overflow-x: auto; }
+  .scroll svg { display: block; min-width: 640px; width: 100%; height: auto; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 16px; font-size: 13px; color: var(--sub); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 18px; height: 0; border-top: 3px solid; border-radius: 2px; }
+  .swatch.dashed { border-top-style: dashed; }
+
+  .eqrow { display: grid; grid-template-columns: 168px 1fr; gap: 8px 18px; align-items: center; padding: 14px 0; }
+  .eqrow + .eqrow { border-top: 1px solid var(--line); }
+  .eqrow .who { font-size: 13.5px; font-weight: 650; }
+  .eqrow .who small { display: block; font-weight: 450; color: var(--sub); font-size: 12px; }
+  .eq { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-family: var(--mono); font-size: 13.5px; }
+  .bar { text-decoration: overline; text-decoration-thickness: 1.5px; }
+  .eq sup, .eq sub { font-size: 0.68em; }
+  .tok { border: 1.5px solid var(--line); border-radius: 7px; padding: 5px 11px; background: color-mix(in srgb, var(--ink) 3%, transparent); white-space: nowrap; }
+  .tok.noise { border-color: var(--noise); color: var(--noise); font-weight: 700; background: color-mix(in srgb, var(--noise) 10%, transparent); }
+  .tok.cam { border-color: color-mix(in srgb, var(--cam) 55%, var(--line)); color: var(--cam); }
+  .tok.robot { border-color: color-mix(in srgb, var(--robot) 55%, var(--line)); color: var(--robot); }
+  .eq .op { color: var(--sub); }
+  .eqverdict { grid-column: 2; font-size: 13px; }
+
+  .badge { display: inline-block; font-size: 12px; font-weight: 650; border-radius: 99px; padding: 2.5px 11px; white-space: nowrap; vertical-align: 1px; }
+  .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+  .badge.bad { color: var(--noise); background: color-mix(in srgb, var(--noise) 12%, transparent); }
+  .badge.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .badge.plain { color: var(--sub); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+  .cases { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+  @media (max-width: 640px) { .cases { grid-template-columns: 1fr; } }
+  .case { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 16px 18px; }
+  .case.best { border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); }
+  .case .head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .case .head b { font-size: 14.5px; }
+  .case .formula { font-family: var(--mono); font-size: 13px; margin: 8px 0 6px; }
+  .case .desc { font-size: 13px; color: var(--sub); line-height: 1.65; }
+
+  table.result { border-collapse: collapse; width: 100%; font-size: 14px; margin: 16px 0 4px; }
+  table.result th, table.result td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.result th { font-size: 12.5px; letter-spacing: .04em; color: var(--sub); font-weight: 600; }
+  table.result td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  table.result th.num { text-align: right; }
+  table.result td.hl { color: var(--ok); font-weight: 700; }
+  table.result tr.best td { background: color-mix(in srgb, var(--ok) 7%, transparent); }
+
+  /* 솔버 상세 카드 */
+  .solver {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+    padding: 20px 22px; margin: 16px 0;
+  }
+  .solver.hilite { border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+  .solver > .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .solver > .head b { font-size: 16.5px; font-weight: 700; }
+  .solver > .head .src { font-size: 12.5px; color: var(--sub); }
+  .solver .idea { font-size: 14px; margin: 8px 0 14px; color: var(--ink); }
+  /* 그리드 대신 padding + 절대배치: 폭이 좁아져도 트랙이 무너지지 않는다 */
+  .steps { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+  .steps li {
+    position: relative; padding-left: 34px;
+    font-size: 13.5px; color: var(--sub); line-height: 1.65;
+  }
+  .steps li + li { margin-top: 10px; }
+  .steps li::before {
+    counter-increment: s; content: counter(s);
+    position: absolute; left: 0; top: 2px;
+    font-family: var(--mono); font-size: 11.5px; font-weight: 700;
+    color: var(--sub); background: color-mix(in srgb, var(--ink) 8%, transparent);
+    border-radius: 50%; width: 20px; height: 20px; line-height: 20px; text-align: center;
+  }
+  .steps li b { color: var(--ink); font-weight: 640; }
+  .steps code { font-family: var(--mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; }
+  .trait { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+  footer.page { border-top: 1px solid var(--line); margin-top: 72px; padding-top: 20px; font-size: 12.5px; color: var(--sub); }
+  footer.page p { margin: 0 0 4px; }
+  a { color: var(--robot); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--robot); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: no-preference) { .case, .solver { transition: border-color .15s ease; } }
+
+  @media print {
+    /* 카드가 페이지 경계에서 쪼개지지 않도록 */
+    .panel, .solver, .case, table.result { break-inside: avoid; }
+    h2, .eyebrow { break-after: avoid; }
+    /* 화면용 가로 스크롤 컨테이너는 인쇄 시 스크롤바만 남으므로 해제 */
+    .scroll { overflow-x: visible; }
+    .scroll svg { min-width: 0; }
+    section { margin-bottom: 40px; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="page">
+  <div class="kicker">Hand-Eye Calibration · Ha, IEEE T-RO 2023 분석</div>
+  <h1>AX = YB — 변수 배치와 세 솔버의 풀이 방식</h1>
+  <p class="lede">거리 최소화(distance minimization) 캘리브레이션은 사실
+  <strong>숨은 노이즈 가정을 가진 최대우도추정(MLE)</strong>.
+  같은 루프 방정식이라도 A·B·X·Y에 무엇을 넣느냐에 따라 결과가 달라지며,
+  <strong>로봇은 A에, 카메라 측정은 노이즈가 붙은 방향 그대로 B에</strong> 배치했을 때만 최적이 되는 구조.
+  그 이론과, 세 솔버가 각각 어떤 방식으로 답을 구하는지 정리.</p>
+</header>
+
+<!-- ══════════ 0. MLE란 ══════════ -->
+<section>
+  <div class="eyebrow">0 · 용어</div>
+  <h2>최대우도추정(MLE)이란</h2>
+  <p><b>Maximum Likelihood Estimation</b> — "지금 관측한 데이터가 나올 확률(likelihood)을
+  가장 높게 만드는 값을 정답으로 고른다"는 추정 방식.
+  측정에 노이즈가 있을 때, 참값을 직접 알 수는 없으니 <b>이 데이터가 가장 그럴듯해 보이는 값</b>을 택하는 방식.</p>
+  <p>캘리브레이션에 대입하면 이런 모습. hand-eye 변환 후보를 하나 정하면, 각 샘플마다
+  "그 값이 맞다면 카메라 측정에 이만큼의 오차가 있었어야 한다"는 노이즈 <b>M<sub>i</sub></b>가 역산되는 구조.
+  노이즈가 작을수록 그럴듯하므로, <b>모든 샘플의 M<sub>i</sub>를 가장 작게 만드는 후보</b>가 MLE 해.</p>
+  <p>여기서 핵심은 <b>"작다"를 무엇으로 재느냐</b>. 노이즈가 어떤 분포를 따르고 어느 자리에 붙어 있는지에 따라
+  올바른 척도가 달라지고, 척도를 잘못 고르면 답도 함께 틀어지는 구조.
+  논문의 요지는 흔히 쓰는 거리 최소화가 <b>특정 노이즈 가정 아래에서만</b> MLE와 같아진다는 것.</p>
+  <div class="panel" style="padding: 18px 22px;">
+    <p style="margin:0; font-size:13.5px; color:var(--sub);">
+      <b style="color:var(--ink)">그 가정</b> — ① 로봇 측정 A는 무잡음(noiseless),
+      ② 카메라 측정 B의 노이즈는 보드(target) 쪽에 오른쪽 곱으로 붙은 등방성(isotropic) 노이즈.
+      이 두 조건이 만족될 때만 <code class="ref">min Σ d(AX, YB)²</code>가 MLE.
+    </p>
+  </div>
+  <p class="note">주요 용어: likelihood(우도, 데이터가 나올 그럴듯함) · isotropic noise(등방성 노이즈, 방향에 무관하게 같은 크기)
+  · right-translated(오른쪽 곱, 변환의 끝단에 노이즈가 붙은 형태) · SE(3)(3차원 강체 변환의 집합)</p>
+</section>
+
+<!-- ══════════ 1. 루프 구조 ══════════ -->
+<section>
+  <div class="eyebrow">1 · 루프 방정식</div>
+  <h2>네 변환과, 노이즈가 사는 곳</h2>
+  <p>Eye-in-hand 구성(논문 Fig 12와 동일)에서 base에서 board로 가는 경로는 둘.
+  로봇을 거치는 경로와 직행 경로가 항상 같아야 한다는 것이 루프 방정식이며,
+  네 변환 중 <b>노이즈는 카메라 측정 B의 끝단(보드 프레임)에만</b> 존재.</p>
+
+  <div class="panel">
+    <div class="scroll">
+    <svg viewBox="0 0 880 420" role="img" aria-label="Eye-in-hand 캘리브레이션 루프 다이어그램">
+      <defs>
+        <marker id="mRobot" markerWidth="9" markerHeight="8" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="var(--robot)"/></marker>
+        <marker id="mCam" markerWidth="9" markerHeight="8" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="var(--cam)"/></marker>
+        <marker id="mUnk" markerWidth="9" markerHeight="8" refX="7" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="var(--unk)"/></marker>
+      </defs>
+      <line x1="40" y1="372" x2="840" y2="372" stroke="var(--line)" stroke-width="2"/>
+      <rect x="88" y="332" width="84" height="40" rx="6" fill="color-mix(in srgb, var(--sub) 22%, var(--panel))" stroke="var(--sub)"/>
+      <text x="130" y="393" text-anchor="middle" font-size="12.5" fill="var(--sub)">base</text>
+      <line x1="130" y1="332" x2="192" y2="212" stroke="var(--sub)" stroke-width="13" stroke-linecap="round"/>
+      <circle cx="192" cy="212" r="10" fill="var(--panel)" stroke="var(--sub)" stroke-width="3"/>
+      <line x1="192" y1="212" x2="298" y2="152" stroke="var(--sub)" stroke-width="11" stroke-linecap="round"/>
+      <rect x="292" y="136" width="34" height="30" rx="5" fill="color-mix(in srgb, var(--sub) 22%, var(--panel))" stroke="var(--sub)"/>
+      <text x="300" y="122" text-anchor="middle" font-size="12.5" fill="var(--sub)">hand</text>
+      <rect x="338" y="132" width="48" height="36" rx="6" fill="color-mix(in srgb, var(--cam) 16%, var(--panel))" stroke="var(--cam)" stroke-width="1.5"/>
+      <circle cx="386" cy="150" r="9" fill="var(--panel)" stroke="var(--cam)" stroke-width="2.5"/>
+      <text x="362" y="192" text-anchor="middle" font-size="12.5" fill="var(--cam)">camera</text>
+      <rect x="636" y="86" width="128" height="128" rx="4" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+      <g fill="var(--ink)" opacity="0.82">
+        <rect x="642" y="92" width="29" height="29"/><rect x="700" y="92" width="29" height="29"/>
+        <rect x="671" y="121" width="29" height="29"/><rect x="729" y="121" width="29" height="29"/>
+        <rect x="642" y="150" width="29" height="29"/><rect x="700" y="150" width="29" height="29"/>
+        <rect x="671" y="179" width="29" height="29"/><rect x="729" y="179" width="29" height="29"/>
+      </g>
+      <text x="700" y="236" text-anchor="middle" font-size="12.5" fill="var(--sub)">ArUco board</text>
+      <path d="M 118 322 Q 108 200 278 162" fill="none" stroke="var(--robot)" stroke-width="2.5" marker-end="url(#mRobot)"/>
+      <text x="96" y="238" font-size="13.5" font-weight="700" fill="var(--robot)">A<tspan font-size="10" dy="3">i</tspan></text>
+      <text x="96" y="256" font-size="12" fill="var(--robot)">로봇 기구학 · 거의 무잡음</text>
+      <path d="M 312 130 Q 336 108 356 126" fill="none" stroke="var(--unk)" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#mUnk)"/>
+      <text x="322" y="98" font-size="13.5" font-weight="700" fill="var(--unk)">Y</text>
+      <text x="340" y="98" font-size="12" fill="var(--unk)">hand→cam · 미지수</text>
+      <path d="M 398 150 L 618 150" fill="none" stroke="var(--cam)" stroke-width="2.5" marker-end="url(#mCam)"/>
+      <text x="470" y="138" font-size="13.5" font-weight="700" fill="var(--cam)">B<tspan font-size="10" dy="3">i</tspan></text>
+      <text x="490" y="138" font-size="12" fill="var(--cam)">카메라 측정 (PnP)</text>
+      <circle cx="636" cy="150" r="17" fill="none" stroke="var(--noise)" stroke-width="1.8" stroke-dasharray="4 4"/>
+      <circle cx="636" cy="150" r="27" fill="none" stroke="var(--noise)" stroke-width="1.4" stroke-dasharray="3 6" opacity="0.65"/>
+      <text x="636" y="270" text-anchor="middle" font-size="13.5" font-weight="700" fill="var(--noise)">M<tspan font-size="10" dy="3">i</tspan></text>
+      <text x="636" y="288" text-anchor="middle" font-size="12" fill="var(--noise)">노이즈는 target(보드) 쪽에</text>
+      <text x="636" y="305" text-anchor="middle" font-size="12" fill="var(--noise)">오른쪽 곱으로 붙는다: <tspan text-decoration="overline">B</tspan> · M</text>
+      <path d="M 178 342 Q 440 296 648 222" fill="none" stroke="var(--unk)" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#mUnk)"/>
+      <text x="404" y="330" font-size="13.5" font-weight="700" fill="var(--unk)">X</text>
+      <text x="422" y="330" font-size="12" fill="var(--unk)">base→board · 미지수</text>
+    </svg>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="border-color: var(--robot)"></span>정확한 측정 (A)</span>
+      <span><span class="swatch" style="border-color: var(--cam)"></span>노이즈 측정 (B)</span>
+      <span><span class="swatch dashed" style="border-color: var(--unk)"></span>추정할 미지수 (X, Y)</span>
+      <span><span class="swatch dashed" style="border-color: var(--noise)"></span>노이즈 M</span>
+    </div>
+    <p class="caption">두 경로의 일치: <b>A<sub>i</sub> · Y · B<sub>i</sub> = X</b>, 정리하면 논문의 AX = YB 꼴.
+    거리 최소화 min Σ d(A<sub>i</sub>X, YB<sub>i</sub>)²가 MLE와 같아지는 조건은 하나뿐 —
+    <b style="color: var(--robot)">A는 무잡음(noiseless)</b>,
+    <b style="color: var(--cam)">B는 target 쪽 오른쪽 곱 등방성 노이즈(right-translated isotropic)</b>.</p>
+  </div>
+</section>
+
+<!-- ══════════ 2. 노이즈 이동 ══════════ -->
+<section>
+  <div class="eyebrow">2 · 핵심 메커니즘</div>
+  <h2>변환을 조작하면 노이즈도 이사</h2>
+  <p>카메라 원시 측정은 노이즈가 오른쪽 끝에 붙은 이상적인 형태. 그런데 역행렬을 취하거나
+  relative motion으로 합성하는 순간 <b style="color:var(--noise)">노이즈 M의 위치가 이동</b>하면서
+  거리 최소화의 가정이 깨지는 구조. 세 솔버가 입력을 다루는 방식을 그대로 옮기면:</p>
+
+  <div class="panel">
+    <div class="eqrow">
+      <div class="who">원시 측정<small>ArUco 검출 결과</small></div>
+      <div class="eq">
+        <span>T<sub>cam→board</sub></span><span class="op">=</span>
+        <span class="tok cam"><span class="bar">T</span></span><span class="op">·</span><span class="tok noise">M</span>
+      </div>
+      <div class="eqverdict"><span class="badge ok">✓ 논문의 가정과 일치</span> &nbsp;노이즈가 target(보드) 쪽 오른쪽 곱 — 이대로 쓰는 것이 최적</div>
+    </div>
+    <div class="eqrow">
+      <div class="who">Tsai-Lenz 입력<small>relative motion 합성</small></div>
+      <div class="eq">
+        <span>B<sub>ij</sub></span><span class="op">=</span>
+        <span class="tok cam"><span class="bar">T</span><sub>j</sub></span><span class="op">·</span>
+        <span class="tok noise">M<sub>j</sub></span><span class="op">·</span>
+        <span class="tok noise">M<sub>i</sub><sup>−1</sup></span><span class="op">·</span>
+        <span class="tok cam"><span class="bar">T</span><sub>i</sub><sup>−1</sup></span>
+      </div>
+      <div class="eqverdict"><span class="badge bad">✗ 노이즈 두 개가 가운데 낌</span> &nbsp;합성 방향을 바꿔도 순수한 오른쪽 곱은 불가능 — AX=XB 형식 자체의 한계</div>
+    </div>
+    <div class="eqrow">
+      <div class="who">DQ RANSAC 입력<small>라이브러리 규약상 반전</small></div>
+      <div class="eq">
+        <span>inv(T)</span><span class="op">=</span>
+        <span class="tok noise">M<sup>−1</sup></span><span class="op">·</span><span class="tok cam"><span class="bar">T</span><sup>−1</sup></span>
+      </div>
+      <div class="eqverdict"><span class="badge warn">△ 노이즈가 왼쪽으로 이동</span> &nbsp;ethz-asl 라이브러리가 world→eye 방향을 요구 — 규약상 불가피</div>
+    </div>
+    <div class="eqrow">
+      <div class="who">AX=YB 입력<small>absolute pose 그대로</small></div>
+      <div class="eq">
+        <span>M<sub>i</sub></span><span class="op">=</span>
+        <span class="tok">X<sup>−1</sup></span><span class="op">·</span>
+        <span class="tok robot">A<sub>i</sub></span><span class="op">·</span>
+        <span class="tok">Y</span><span class="op">·</span>
+        <span class="tok cam">B<sub>i</sub></span>
+      </div>
+      <div class="eqverdict"><span class="badge ok">✓ 변형 없음</span> &nbsp;합성도 반전도 없이 absolute pose를 직접 사용 — 노이즈가 정의된 자리에서 평가됨</div>
+    </div>
+  </div>
+
+  <p class="note">SE(3)에는 양측 불변 거리가 없어서, A/B를 스왑하거나 역행렬을 취하면 루프 방정식은 그대로여도
+  <b>추정 결과가 실제로 달라짐</b> — 측정을 늘려도 사라지지 않는 편향으로.</p>
+</section>
+
+<!-- ══════════ 3. 네 배치 ══════════ -->
+<section>
+  <div class="eyebrow">3 · 논문의 검증</div>
+  <h2>같은 루프, 네 가지 배치 — 오직 하나만 최적</h2>
+  <p>A·B를 스왑하거나 역행렬한 네 배치는 수학적으로 동일한 루프를 만들지만,
+  논문의 수치 실험(Fig 5)과 UR3e 하드웨어 실험(Fig 13–14) 모두에서 <b>Case 1만 최저 오차</b>를 기록.</p>
+
+  <div class="cases">
+    <div class="case best">
+      <div class="head"><b>Case 1 — 올바른 배치</b><span class="badge ok">✓ 최적</span></div>
+      <div class="formula">min Σ d(A<sub>i</sub>X, YB<sub>i</sub>)²</div>
+      <div class="desc">A = 로봇(무잡음), B = cam→board 그대로. 노이즈 가정과 일치 → 거리 최소화 = MLE.</div>
+    </div>
+    <div class="case">
+      <div class="head"><b>Case 2 — 스왑 + 역행렬</b><span class="badge bad">✗ 편향</span></div>
+      <div class="formula">min Σ d(B<sub>i</sub><sup>−1</sup>Y<sup>−1</sup>, X<sup>−1</sup>A<sub>i</sub><sup>−1</sup>)²</div>
+      <div class="desc">노이즈 측정이 A 자리로, 역행렬로 노이즈 위치까지 반전. rotation·translation 오차 최대급.</div>
+    </div>
+    <div class="case">
+      <div class="head"><b>Case 3 — 스왑만</b><span class="badge bad">✗ 편향</span></div>
+      <div class="formula">min Σ d(B<sub>i</sub>X<sup>−1</sup>, Y<sup>−1</sup>A<sub>i</sub>)²</div>
+      <div class="desc">"카메라가 무잡음, 로봇이 노이즈"라고 가정하는 셈 — 현실과 반대.</div>
+    </div>
+    <div class="case">
+      <div class="head"><b>Case 4 — 역행렬만</b><span class="badge bad">✗ 편향</span></div>
+      <div class="formula">min Σ d(A<sub>i</sub><sup>−1</sup>Y, XB<sub>i</sub><sup>−1</sup>)²</div>
+      <div class="desc">B<sub>i</sub><sup>−1</sup>는 노이즈를 왼쪽 곱으로 옮겨 target 쪽 가정을 위반.</div>
+    </div>
+  </div>
+
+  <p>노이즈 구성이 실제와 다른 두-카메라 실험(논문 Table I)에서는 격차가 극적으로 벌어짐.
+  보드 코너 간 거리 재구성 오차:</p>
+  <table class="result">
+    <tr><th>방법</th><th class="num">평균 오차</th><th class="num">최대 오차</th></tr>
+    <tr><td>거리 최소화 (노이즈 구성 무시)</td><td class="num">4.83 mm</td><td class="num">5.33 mm</td></tr>
+    <tr class="best"><td>확률적 방법 (노이즈 구성 반영)</td><td class="num hl">0.50 mm</td><td class="num">0.94 mm</td></tr>
+  </table>
+  <p class="note">잘못된 노이즈 구성의 오차는 측정 수를 1,000개까지 늘려도 포화된 편향으로 남음 (논문 Fig 10–11).</p>
+</section>
+
+<!-- ══════════ 4. 세 솔버의 풀이 방식 ══════════ -->
+<section>
+  <div class="eyebrow">4 · 풀이 방식</div>
+  <h2>세 솔버는 각각 어떻게 답을 구하나</h2>
+  <p>셋 다 결국 hand-eye 변환(EE→camera)을 내놓지만, 도달하는 경로가 서로 다름.
+  rotation과 translation을 나눠 푸는지 함께 푸는지, relative motion을 만드는지
+  absolute pose를 그대로 쓰는지가 갈리는 지점.</p>
+
+  <div class="panel">
+    <div class="scroll">
+    <svg viewBox="0 0 700 330" role="img" aria-label="세 솔버의 처리 파이프라인 비교">
+      <defs>
+        <marker id="ar" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--sub)"/></marker>
+        <marker id="arN" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--noise)"/></marker>
+        <marker id="arO" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="var(--ok)"/></marker>
+      </defs>
+
+      <!-- Tsai-Lenz -->
+      <text x="0" y="14" font-size="12.5" font-weight="700" fill="var(--ink)">Tsai-Lenz</text>
+      <text x="72" y="14" font-size="11.5" fill="var(--sub)">rotation → translation, 순차</text>
+      <rect x="0"   y="26" width="118" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="59"  y="47" text-anchor="middle" font-size="11.5" fill="var(--sub)">Absolute poses</text>
+      <line x1="118" y1="43" x2="146" y2="43" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <text x="132" y="36" text-anchor="middle" font-size="10" fill="var(--noise)">compose</text>
+      <rect x="150" y="26" width="118" height="34" rx="6" fill="color-mix(in srgb, var(--noise) 8%, transparent)" stroke="var(--noise)" stroke-width="1.4"/>
+      <text x="209" y="47" text-anchor="middle" font-size="11.5" fill="var(--noise)">Relative motions</text>
+      <line x1="268" y1="43" x2="296" y2="43" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="300" y="26" width="140" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="370" y="47" text-anchor="middle" font-size="11.5" fill="var(--sub)">Rotation R (SVD)</text>
+      <line x1="440" y1="43" x2="468" y2="43" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="472" y="26" width="160" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="552" y="47" text-anchor="middle" font-size="11.5" fill="var(--sub)">Translation t (LSQ)</text>
+      <line x1="632" y1="43" x2="660" y2="43" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <text x="678" y="47" text-anchor="middle" font-size="12" font-weight="700" fill="var(--unk)">X</text>
+      <path d="M 370 62 Q 370 78 460 78 Q 552 78 552 64" fill="none" stroke="var(--noise)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arN)"/>
+      <text x="462" y="93" text-anchor="middle" font-size="10.5" fill="var(--noise)">rotation 오차가 translation으로 전파</text>
+
+      <!-- DQ RANSAC -->
+      <text x="0" y="134" font-size="12.5" font-weight="700" fill="var(--ink)">DQ RANSAC</text>
+      <text x="86" y="134" font-size="11.5" fill="var(--sub)">rotation + translation 동시, resampling</text>
+      <rect x="0"   y="146" width="118" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="59"  y="167" text-anchor="middle" font-size="11.5" fill="var(--sub)">Absolute poses</text>
+      <line x1="118" y1="163" x2="146" y2="163" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <text x="132" y="156" text-anchor="middle" font-size="10" fill="var(--noise)">compose</text>
+      <rect x="150" y="146" width="118" height="34" rx="6" fill="color-mix(in srgb, var(--noise) 8%, transparent)" stroke="var(--noise)" stroke-width="1.4"/>
+      <text x="209" y="167" text-anchor="middle" font-size="11.5" fill="var(--noise)">Relative motions</text>
+      <line x1="268" y1="163" x2="296" y2="163" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="300" y="146" width="140" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="370" y="167" text-anchor="middle" font-size="11.5" fill="var(--sub)">Screw axis 정합</text>
+      <line x1="440" y1="163" x2="468" y2="163" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="472" y="146" width="160" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="552" y="167" text-anchor="middle" font-size="11.5" fill="var(--sub)">Null space: R, t 동시</text>
+      <line x1="632" y1="163" x2="660" y2="163" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <text x="678" y="167" text-anchor="middle" font-size="12" font-weight="700" fill="var(--unk)">X</text>
+      <path d="M 552 182 Q 552 200 370 200 Q 300 200 300 184" fill="none" stroke="var(--sub)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+      <text x="430" y="215" text-anchor="middle" font-size="10.5" fill="var(--sub)">sample 3개 재추출 · inlier 최대화 (RANSAC)</text>
+
+      <!-- AX=YB -->
+      <text x="0" y="256" font-size="12.5" font-weight="700" fill="var(--ok)">AX=YB</text>
+      <text x="62" y="256" font-size="11.5" fill="var(--sub)">closed-form 초기해 → iterative refinement</text>
+      <rect x="0"   y="268" width="118" height="34" rx="6" fill="color-mix(in srgb, var(--ok) 8%, transparent)" stroke="var(--ok)" stroke-width="1.4"/>
+      <text x="59"  y="289" text-anchor="middle" font-size="11.5" fill="var(--ok)">Absolute poses</text>
+      <line x1="118" y1="285" x2="296" y2="285" stroke="var(--ok)" stroke-width="1.4" marker-end="url(#arO)"/>
+      <text x="207" y="278" text-anchor="middle" font-size="10" fill="var(--ok)">변형 없이 그대로</text>
+      <rect x="300" y="268" width="140" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="370" y="289" text-anchor="middle" font-size="11.5" fill="var(--sub)">Closed-form init</text>
+      <line x1="440" y1="285" x2="468" y2="285" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="472" y="268" width="160" height="34" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+      <text x="552" y="289" text-anchor="middle" font-size="11.5" fill="var(--sub)">MLE refinement (LM)</text>
+      <line x1="632" y1="285" x2="660" y2="285" stroke="var(--sub)" stroke-width="1.4" marker-end="url(#ar)"/>
+      <text x="682" y="289" text-anchor="middle" font-size="12" font-weight="700" fill="var(--unk)">Y, X</text>
+    </svg>
+    </div>
+    <p class="caption">붉은 상자가 relative motion을 합성하는 지점. 이 단계를 거치는 두 솔버는 앞서 본 대로
+    노이즈가 변환 가운데로 들어가고, 같은 측정이 여러 쌍에 재사용되어 residual끼리 상관되는 구조.</p>
+  </div>
+
+  <div class="solver">
+    <div class="head"><b>Tsai-Lenz</b><span class="src">1989 · AX = XB</span><span class="badge plain">rotation 먼저, translation 나중</span></div>
+    <p class="idea">두 자세 사이의 <b>relative motion</b>에서는 rotation만 따로 떼어 풀 수 있다는 관찰에서 출발.
+    rotation을 먼저 확정한 뒤 그 값을 넣어 translation을 선형으로 푸는 2단 구조.</p>
+    <ol class="steps">
+      <li><b>Relative motion 합성</b> — absolute pose 쌍에서
+        <code>A<sub>ij</sub> = A<sub>j</sub><sup>−1</sup>A<sub>i</sub></code>,
+        <code>B<sub>ij</sub> = B<sub>j</sub>B<sub>i</sub><sup>−1</sup></code>를 생성. 프로젝트 구현은 모든 (i, j) 조합을 사용.</li>
+      <li><b>Rotation 추정</b> — 각 쌍의 rotation을 axis-angle 벡터로 바꿔 outer product의 합
+        <code>M = Σ log(R<sub>B</sub>) · log(R<sub>A</sub>)<sup>T</sup></code>을 쌓고,
+        <code>R<sub>X</sub> = (M<sup>T</sup>M)<sup>−1/2</sup> M<sup>T</sup></code>로 orthogonalize.</li>
+      <li><b>Translation 추정</b> — 확정된 R<sub>X</sub>를 대입해
+        <code>(I − R<sub>A</sub>) t<sub>X</sub> = t<sub>A</sub> − R<sub>X</sub> t<sub>B</sub></code>를
+        모든 쌍에 대해 쌓아 least squares로 풀이.</li>
+    </ol>
+    <div class="trait">
+      <span class="badge plain">2단 분리</span>
+      <span class="badge bad">rotation 오차가 translation으로 전파</span>
+      <span class="badge bad">outlier 처리 없음</span>
+      <span class="badge plain">가장 빠름</span>
+    </div>
+  </div>
+
+  <div class="solver">
+    <div class="head"><b>DQ RANSAC</b><span class="src">Daniilidis 1999 · AX = XB</span><span class="badge plain">rotation·translation 동시</span></div>
+    <p class="idea">모든 rigid body motion은 <b>어떤 축을 중심으로 회전하면서 그 축을 따라 이동하는 것</b>(screw motion)으로
+    표현 가능. hand-eye 변환은 로봇의 screw axis를 카메라의 screw axis로 옮기는 변환이라는 기하 조건을 활용.</p>
+    <ol class="steps">
+      <li><b>Dual quaternion 변환</b> — 각 relative motion을 dual quaternion으로 표현.
+        rotation은 real part, translation은 dual part에 실려 <b>하나의 대수 객체 안에 함께</b> 담기는 형태.</li>
+      <li><b>Screw congruence 조건</b> — 대응하는 두 motion은 회전각과 축 방향 이동량(pitch)이 같아야 하며,
+        축 방향만 hand-eye 변환만큼 어긋나는 관계. 이 조건을 각 쌍마다 6×8 행렬로 구성.</li>
+      <li><b>Null space에서 동시 해</b> — 행렬을 쌓아 SVD를 취하면 해가 null space에 놓임.
+        여기서 <b>rotation과 translation이 한 번에</b> 나오므로 오차 전파가 없는 구조.</li>
+      <li><b>RANSAC 반복</b> — sample 3개로 후보 해를 만들고 inlier를 세는 과정을 반복해,
+        마커 오검출 같은 outlier를 배제한 해를 선택.</li>
+    </ol>
+    <div class="trait">
+      <span class="badge ok">오차 전파 없음</span>
+      <span class="badge ok">outlier에 강건</span>
+      <span class="badge plain">inlier 수 보고</span>
+      <span class="badge warn">subset만 사용해 sample 효율 손해</span>
+    </div>
+  </div>
+
+  <div class="solver hilite">
+    <div class="head"><b>AX = YB</b><span class="src">Ha 2023 · AX = YB</span><span class="badge ok">노이즈 모델 직접 사용</span></div>
+    <p class="idea">relative motion을 만들지 않는 방식. absolute pose를 그대로 두고 미지수를 <b>둘</b>(hand-eye Y, base→board X)로
+    늘려 루프를 닫으면 카메라 노이즈가 정의된 자리에 그대로 남으며, 그 크기를 직접 최소화.</p>
+    <ol class="steps">
+      <li><b>Closed-form 초기해</b> — Shah 방법(<code>cv2.calibrateRobotWorldHandEye</code>)으로 X, Y의 출발점을 확보.
+        초기값 단계라 배치 편향이 치명적이지 않음.</li>
+      <li><b>노이즈를 식으로 표현</b> — 루프에서 각 샘플의 노이즈를 그대로 추출:
+        <code>M<sub>i</sub> = X<sup>−1</sup> A<sub>i</sub> Y B<sub>i</sub></code>.
+        측정이 완벽하면 M<sub>i</sub>는 identity.</li>
+      <li><b>MLE refinement</b> — 노이즈의 크기 <code>Σ ‖log R<sub>M</sub>‖² + w²‖t<sub>M</sub>‖²</code>를
+        Levenberg-Marquardt(nonlinear least squares)로 최소화(12개 파라미터).
+        weight w는 카메라의 translation/rotation 노이즈 비율이라 물리적 의미를 갖는 값(기본 1° ≡ 3 mm).</li>
+      <li><b>부산물</b> — Y뿐 아니라 X(base→board)도 함께 나와, 로봇을 보드로 보내보는 물리 검증에 바로 쓸 수 있는 값.
+        샘플별 residual 통계(rotation ° / translation mm)도 함께 보고.</li>
+    </ol>
+    <div class="trait">
+      <span class="badge ok">relative motion 합성 없음</span>
+      <span class="badge ok">측정 반전 없음</span>
+      <span class="badge ok">residual·부산물로 자체 검증</span>
+      <span class="badge warn">outlier 처리는 별도 필요</span>
+    </div>
+  </div>
+
+  <table class="result">
+    <tr><th>구분</th><th>Tsai-Lenz</th><th>DQ RANSAC</th><th>AX = YB</th></tr>
+    <tr>
+      <td>Formulation</td>
+      <td>AX = XB</td>
+      <td>AX = XB</td>
+      <td>AX = YB</td>
+    </tr>
+    <tr>
+      <td>입력</td>
+      <td>Relative motion (합성)</td>
+      <td>Relative motion (합성 + 반전)</td>
+      <td class="hl">Absolute pose (그대로)</td>
+    </tr>
+    <tr>
+      <td>Rotation · translation</td>
+      <td>순차 (전파 있음)</td>
+      <td>동시</td>
+      <td>동시 (iterative)</td>
+    </tr>
+    <tr>
+      <td>Outlier</td>
+      <td>처리 없음</td>
+      <td class="hl">RANSAC</td>
+      <td>처리 없음</td>
+    </tr>
+    <tr>
+      <td>미지수</td>
+      <td>Hand-eye</td>
+      <td>Hand-eye</td>
+      <td class="hl">Hand-eye + base→board</td>
+    </tr>
+    <tr>
+      <td>품질 지표</td>
+      <td>없음</td>
+      <td>RMSE, inlier 수</td>
+      <td class="hl">Residual RMSE (° / mm)</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ══════════ 5. 정확도 ══════════ -->
+<section>
+  <div class="eyebrow">5 · 결과</div>
+  <h2>정확도로 드러나는 방식의 차이</h2>
+  <p>합성 데이터 20 포즈 × 50회, 보드 쪽에 1° / 3 mm 등방성 노이즈를 주입한 조건에서
+  세 솔버가 참값을 얼마나 잘 복원하는지 비교.</p>
+
+  <table class="result">
+    <tr><th>솔버</th><th class="num">Rotation error</th><th class="num">Translation error</th></tr>
+    <tr><td>Tsai-Lenz</td><td class="num">0.471°</td><td class="num">4.62 mm</td></tr>
+    <tr><td>DQ RANSAC</td><td class="num">0.555°</td><td class="num">5.26 mm</td></tr>
+    <tr class="best"><td><b>AX = YB</b></td><td class="num hl">0.130°</td><td class="num hl">1.60 mm</td></tr>
+  </table>
+
+  <p class="note">AX=YB가 Tsai-Lenz 대비 rotation 3.6배·translation 2.9배 우위. 논문이 예측한 대로
+  올바른 배치에서 노이즈 모델에 맞춰 푸는 것의 이득이 그대로 나타나는 결과.</p>
+  <p class="note">DQ RANSAC이 Tsai-Lenz보다 근소하게 뒤진 것은 실력이 아니라 조건 탓.
+  이 합성 데이터에는 outlier가 전혀 없고 모든 샘플이 같은 가우시안 노이즈만 갖는데,
+  그런 상황에서 RANSAC은 부분집합으로 모델을 세우는 만큼 손해를 보는 구조.
+  마커 오검출이나 타이밍 불일치가 섞이는 실제 수집에서는 순위가 달라짐.</p>
+</section>
+
+<footer class="page">
+  <p>출처: J. Ha, "Probabilistic Framework for Hand-Eye and Robot-World Calibration AX = YB," <i>IEEE Transactions on Robotics</i>, vol. 39, no. 2, 2023.</p>
+  <p>비교 대상: Tsai &amp; Lenz (IEEE T-RA 1989) · Daniilidis (IJRR 1999) · Shah (J. Mech. Robot. 2013)</p>
+</footer>
+
+</div>
