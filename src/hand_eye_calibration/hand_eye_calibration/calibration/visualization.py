@@ -9,7 +9,10 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from PyQt5 import QtWidgets
 
-matplotlib.use("QtAgg")
+try:
+    matplotlib.use("QtAgg")
+except ImportError:
+    pass  # headless environment (e.g. tests): keep the default backend
 
 
 def _draw_frame(ax, T, label, axis_length=0.06, linewidth=2):

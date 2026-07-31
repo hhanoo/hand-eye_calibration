@@ -33,6 +33,7 @@ from .calibration import (
     plot_pose_pairs,
     save_calibration_result,
     save_pose_pairs,
+    solve_ax_yb,
     solve_dq_ransac,
     solve_tsai_lenz,
 )
@@ -123,6 +124,19 @@ class CalibrationWorker(QThread):
                 if self.algo == "Tsai-Lenz":
                     X = solve_tsai_lenz(self.robot_T_list, self.marker_T_list)
                     self.finished.emit({"success": True, "X": X, "algo": self.algo})
+                elif self.algo == "AX=YB":
+                    Y, X_base_board, info = solve_ax_yb(
+                        self.robot_T_list, self.marker_T_list
+                    )
+                    self.finished.emit(
+                        {
+                            "success": True,
+                            "X": Y,
+                            "X_base_board": X_base_board,
+                            "info": info,
+                            "algo": self.algo,
+                        }
+                    )
                 else:
                     success, X, rmse, num_inliers = solve_dq_ransac(
                         self.robot_T_list,
@@ -372,7 +386,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         algo_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         cal_row.addWidget(algo_label)
         self.combo_algo = QtWidgets.QComboBox()
-        self.combo_algo.addItems(["Tsai-Lenz", "DQ RANSAC"])
+        self.combo_algo.addItems(["Tsai-Lenz", "DQ RANSAC", "AX=YB"])
         self.combo_algo.setCurrentIndex(0)
         self.combo_algo.setFixedHeight(BTN_H)
         cal_row.addWidget(self.combo_algo)
@@ -622,8 +636,19 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.btn_save.setEnabled(True)
 
         mat_str = np.array2string(X, precision=6, suppress_small=True)
+        extra_str = ""
         if algo == "Tsai-Lenz":
             rmse_str = ""
+        elif algo == "AX=YB":
+            info = result["info"]
+            rmse_str = (
+                f"\nResidual RMSE rot: {info['rot_rmse_deg']:.3f} deg"
+                f"  trans: {info['trans_rmse_mm']:.3f} mm  (n={info['n']})"
+            )
+            bw_str = np.array2string(
+                result["X_base_board"], precision=6, suppress_small=True
+            )
+            extra_str = f"\n\nBase to board (T_base_board, for validation):\n{bw_str}"
         else:
             rmse_pos, rmse_ori = result["rmse"]
             rmse_str = f"\nRMSE pos: {rmse_pos:.6f}  ori: {rmse_ori:.6f}  |  Inliers: {result['num_inliers']}/{result['n']}"
@@ -631,6 +656,7 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
         self.result_text.setText(
             f"Algorithm: {algo}{rmse_str}\n"
             f"X (end-effector to camera, T_hand_eye):\n{mat_str}"
+            f"{extra_str}"
         )
 
     def _on_save_result(self):

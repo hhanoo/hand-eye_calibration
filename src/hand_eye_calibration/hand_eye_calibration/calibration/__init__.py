@@ -1,4 +1,5 @@
 from .aruco_detector import ArUcoDetector
+from .ax_yb import solve_ax_yb
 from .data_io import (
     load_calibration_result,
     load_pose_pairs,
