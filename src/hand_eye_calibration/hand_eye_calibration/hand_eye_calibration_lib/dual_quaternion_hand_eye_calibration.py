@@ -707,7 +707,7 @@ def compute_hand_eye_calibration_RANSAC(dq_B_H_vec, dq_W_E_vec, config):
     if config.enable_exhaustive_search:
       sample_indices = list(all_sample_combinations[sample_number])
     else:
-      sample_indices = random.sample(indices_set,
+      sample_indices = random.sample(sorted(indices_set),
                                      config.ransac_sample_size)
     sample_number += 1
 
