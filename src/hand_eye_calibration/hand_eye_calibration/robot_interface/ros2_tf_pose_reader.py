@@ -60,6 +60,17 @@ class ROS2TFPoseReader(PoseReader):
         self.ee_frame = ee_frame
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, node)
+        self._seq = 0
+        self._last_stamp = None
+
+    @property
+    def pose_seq(self) -> int:
+        """Counter incremented once per newly timestamped transform.
+
+        The TF buffer answers from a multi-second cache, so lookups keep
+        succeeding after the publisher stops — a frozen counter means stale.
+        """
+        return self._seq
 
     def connect(self) -> bool:
         """Check if TF frames are available (5 second timeout).
@@ -81,6 +92,11 @@ class ROS2TFPoseReader(PoseReader):
         transform = self.tf_buffer.lookup_transform(
             self.base_frame, self.ee_frame, Time(), timeout=Duration(seconds=1.0)
         )
+        stamp = transform.header.stamp
+        stamp_key = (stamp.sec, stamp.nanosec)
+        if stamp_key != self._last_stamp:
+            self._last_stamp = stamp_key
+            self._seq += 1
         return _transform_to_matrix(transform)
 
     def disconnect(self):

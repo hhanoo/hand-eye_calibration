@@ -16,14 +16,75 @@ from .pose_reader_interface import PoseReader
 class URDirectPoseReader(PoseReader):
     """Acquire UR robot poses via direct socket read on port 30003."""
 
+    # The real-time interface streams one fixed-size packet per control cycle.
+    # Its length varies with controller software (1044/1060/1108/1116/1220),
+    # all of which fall in this range; the leading int32 carries the length.
+    _MIN_PACKET = 1024
+    _MAX_PACKET = 1279
+    _POSE_OFFSET = 444  # "Tool vector actual" — 6 big-endian doubles
+
     def __init__(self, ip: str, port: int = 30003):
         self.ip = ip
         self.port = port
         self._socket = None
         self._lock = threading.Lock()
         self._latest_pose = None
+        self._buffer = b""
+        self._seq = 0
         self._running = False
         self._thread = None
+
+    @property
+    def pose_seq(self) -> int:
+        """Counter incremented once per packet parsed (frozen = stale data)."""
+        with self._lock:
+            return self._seq
+
+    def _feed(self, data: bytes) -> int:
+        """Reassemble the TCP stream, keep the newest pose, return packet count."""
+        self._buffer += data
+        count = 0
+        latest = None
+
+        while True:
+            if len(self._buffer) < 4:
+                break
+            size = struct.unpack(">i", self._buffer[0:4])[0]
+            if not (self._MIN_PACKET <= size <= self._MAX_PACKET):
+                # Stream is misaligned (joined mid-packet, or bytes lost).
+                # Scan for the next plausible length header.
+                offset = self._resync(self._buffer)
+                if offset is None:
+                    self._buffer = self._buffer[-3:]
+                    break
+                self._buffer = self._buffer[offset:]
+                continue
+            if len(self._buffer) < size:
+                break
+            # Keep overwriting: when several packets arrive in one recv(),
+            # only the last one is current.
+            latest = self._buffer[: self._POSE_OFFSET + 48]
+            self._buffer = self._buffer[size:]
+            count += 1
+
+        if latest is not None:
+            x, y, z, rx, ry, rz = struct.unpack(
+                ">6d", latest[self._POSE_OFFSET : self._POSE_OFFSET + 48]
+            )
+            T = self._build_matrix(x, y, z, rx, ry, rz)
+            with self._lock:
+                self._latest_pose = T
+                self._seq += 1
+        return count
+
+    @classmethod
+    def _resync(cls, buf: bytes):
+        """Index of the next plausible packet header, or None."""
+        for i in range(1, len(buf) - 3):
+            size = struct.unpack(">i", buf[i : i + 4])[0]
+            if cls._MIN_PACKET <= size <= cls._MAX_PACKET:
+                return i
+        return None
 
     def connect(self) -> bool:
         try:
@@ -53,15 +114,10 @@ class URDirectPoseReader(PoseReader):
     def _read_loop(self):
         while self._running:
             try:
-                data = self._socket.recv(5120)
+                data = self._socket.recv(8192)
                 if len(data) == 0:
                     break
-                if len(data) > 1108 and data[0:3] == b"\x00\x00\x04":
-                    # Actual TCP pose: bytes 444-492 (6 x big-endian double)
-                    x, y, z, rx, ry, rz = struct.unpack(">6d", data[444:492])
-                    T = self._build_matrix(x, y, z, rx, ry, rz)
-                    with self._lock:
-                        self._latest_pose = T
+                self._feed(data)
             except Exception:
                 break
         self._running = False

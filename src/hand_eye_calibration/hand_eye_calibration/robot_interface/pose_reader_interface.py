@@ -35,3 +35,17 @@ class PoseReader(ABC):
     def disconnect(self):
         """Disconnect from the robot."""
         ...
+
+    @property
+    def pose_seq(self):
+        """
+        Get pose update counter.
+
+        Lets callers distinguish a motionless robot from a stalled stream
+        serving a stale pose.
+
+        Returns:
+            Counter incremented once per pose received, or None if the
+            reader cannot go stale.
+        """
+        return None

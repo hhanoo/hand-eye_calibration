@@ -513,13 +513,22 @@ class HandEyeCalibrationGUI(QtWidgets.QMainWindow):
             self.node.pending_display = False
 
     def _check_robot_stable(self, decimals=4):
-        """로봇이 정지했는지 확인 (소수점 decimals자리 반올림 비교, 2회)."""
+        """로봇이 정지했는지 확인 (소수점 decimals자리 반올림 비교, 2회).
+
+        스트림이 멈추면 같은 값이 반복되어 정지로 오인되므로,
+        포즈 수신 카운터가 증가했는지도 확인한다. 카운터는 각 get_pose()
+        이후에 읽는다 (TF 리더는 조회 시점에 갱신되기 때문).
+        """
         try:
             prev = np.round(self.pose_reader.get_pose(), decimals)
+            seq_prev = self.pose_reader.pose_seq
             time.sleep(0.05)
             curr = np.round(self.pose_reader.get_pose(), decimals)
+            seq_curr = self.pose_reader.pose_seq
         except Exception:
             return False
+        if seq_prev is not None and seq_curr == seq_prev:
+            return False  # 스트림 정지 — 값이 같아도 낡은 포즈
         return np.array_equal(prev, curr)
 
     def _flash_camera(self, color, duration_ms=500):
