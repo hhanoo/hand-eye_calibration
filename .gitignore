@@ -45,3 +45,7 @@ docker/config.sh
 
 # Calibration data
 data/
+
+# External repos (not submodules)
+src/realsense-ros
+src/OrbbecSDK_ROS2

@@ -169,7 +169,10 @@ RUN python3 -m pip install --no-cache-dir \
 # =========================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    clangd \
     cmake \
+    gdb \
+    gdbserver \
     pkg-config \
     terminator \
     vim \

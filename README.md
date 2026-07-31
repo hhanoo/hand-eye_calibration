@@ -173,7 +173,7 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 │   ├── run.sh                                  # Docker 컨테이너 실행
 │   ├── entrypoint.sh                           # ROS2 환경 설정 + RMW(CycloneDDS) 설정
 │   ├── cyclonedds.xml                          # CycloneDDS 튜닝 (대용량 센서 메시지용)
-│   └── commands.sh                             # 컨테이너 내 명령어 함수 정의 (build, camera-*, gui-*, doosan)
+│   └── commands.sh                             # 컨테이너 내 명령어 함수 정의 (build, debug-*, camera-*, gui-*, doosan)
 │
 └── src/
     ├── (camera driver)                         # VCS로 가져옴: realsense-ros 또는 OrbbecSDK_ROS2
@@ -550,7 +550,9 @@ gui-realsense      # 또는 gui-orbbec
 | `gui-realsense`    | GUI 실행 (RealSense 토픽)    | [gui_node.py](src/hand_eye_calibration/hand_eye_calibration/gui_node.py)           |
 | `gui-orbbec`       | GUI 실행 (Orbbec 토픽)       | `image_topic` / `camera_info_topic` 파라미터를 `/camera/color/...`로 오버라이드    |
 | `doosan`           | Doosan 포즈 리더 실행        | [dsr_pose_reader.launch.py](src/dsr_pose_reader/launch/dsr_pose_reader.launch.py)  |
-| `build`            | 워크스페이스 빌드            | Release 빌드 + `install/setup.bash` 적용                                           |
+| `build`            | 워크스페이스 빌드            | Release 빌드 + `install/setup.bash` 적용 (`compile_commands.json` 생성)            |
+| `build-debug`      | 디버그 심볼 포함 빌드        | RelWithDebInfo (최적화 유지 + 디버그 심볼)                                         |
+| `debug-doosan`     | pose_reader_node 디버그 실행 | gdbserver `:3000` 대기 → 호스트 VSCode에서 F5 attach                               |
 | `cmd-help`         | 사용 가능한 명령어 목록 출력 | 컨테이너 접속 시 자동 출력                                                         |
 
 ---

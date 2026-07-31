@@ -8,7 +8,7 @@ WORKSPACE="/ros2_ws"
 restore_ownership() {
     # Restore host file ownership
     if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ] && [ -d "$WORKSPACE" ]; then
-        chown -R "$HOST_UID:$HOST_GID" "$WORKSPACE"
+        chown -R "$HOST_UID:$HOST_GID" "$WORKSPACE" 2>/dev/null || true
     fi
 }
 

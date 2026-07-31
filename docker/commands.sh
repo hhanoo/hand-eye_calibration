@@ -13,14 +13,28 @@ source-config() {
 }
 
 # ===== Build =====
+# if you want to show details, use `--event-handlers console_direct+`
 build() {
     cd /ros2_ws || return 1
     colcon build \
         --symlink-install \
-        --event-handlers console_direct+ \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release "$@"
+        --cmake-args \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_BUILD_TYPE=Release "$@"
     source-ros-ws
     source-config
+}
+
+build-debug() {
+    # Build with debug symbols, keep optimization (RelWithDebInfo)
+    build -DCMAKE_BUILD_TYPE=RelWithDebInfo "$@"
+}
+
+# ===== Debug =====
+# Run a node under gdbserver so host VSCode (cppdbg) can attach on :3000.
+debug-doosan() {
+    source-ros-ws
+    gdbserver :3000 /ros2_ws/build/dsr_pose_reader/pose_reader_node "$@"
 }
 
 # ===== Camera launchers =====
@@ -69,6 +83,11 @@ cmd-help() {
 
     printf "  Build:\n"
     printf "    %-18s - %s\n" "build"             "colcon build (Release) + source overlay"
+    printf "    %-18s - %s\n" "build-debug"       "build with debug symbols (RelWithDebInfo)"
+    printf "\n"
+
+    printf "  Debug (gdbserver :3000, host VSCode F5 attach):\n"
+    printf "    %-18s - %s\n" "debug-doosan"      "Run pose_reader_node under gdbserver"
     printf "\n"
 
     printf "  Camera launchers:\n"
