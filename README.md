@@ -37,6 +37,7 @@
   - [전체 빌드](#전체-빌드)
   - [특정 패키지 빌드](#특정-패키지-빌드)
   - [클린 빌드](#클린-빌드)
+  - [테스트](#테스트)
 - [실행](#실행)
   - [개별 모듈 실행](#개별-모듈-실행)
   - [Docker 실행](#docker-실행)
@@ -59,10 +60,11 @@
   - [1. Qt 플러그인 충돌](#1-qt-플러그인-충돌)
   - [2. RealSense 카메라 인식 안 됨](#2-realsense-카메라-인식-안-됨)
   - [3. ArUco 마커 검출 안 됨](#3-aruco-마커-검출-안-됨)
-  - [4. cv_bridge NumPy 버전 충돌](#4-cv_bridge-numpy-버전-충돌)
-  - [5. Docker에서 GUI 표시 안 됨](#5-docker에서-gui-표시-안-됨)
-  - [6. Orbbec 카메라 NVRAM 타임아웃](#6-orbbec-카메라-nvram-타임아웃)
-  - [7. 대용량 센서 메시지 drop](#7-대용량-센서-메시지-drop)
+  - [4. 캘리브레이션 결과가 부정확함](#4-캘리브레이션-결과가-부정확함)
+  - [5. cv_bridge NumPy 버전 충돌](#5-cv_bridge-numpy-버전-충돌)
+  - [6. Docker에서 GUI 표시 안 됨](#6-docker에서-gui-표시-안-됨)
+  - [7. Orbbec 카메라 NVRAM 타임아웃](#7-orbbec-카메라-nvram-타임아웃)
+  - [8. 대용량 센서 메시지 drop](#8-대용량-센서-메시지-drop)
 - [라이선스](#라이선스)
 - [Maintainer](#maintainer)
 
@@ -97,30 +99,39 @@
 
 ### 프로젝트 목적
 
-로봇 엔드이펙터와 카메라 사이의 변환 관계 X(AX=XB)를 구하는 Hand-Eye Calibration 시스템. ROS2 Humble 기반 PyQt5 GUI에서 데이터 수집, 캘리브레이션 실행, 결과 저장까지 한 화면에서 처리하며, read-only 연결로 로봇 제어권을 가져오지 않아 펜던트 조작을 유지한 채 포즈 수집이 가능한 구조.
+로봇 엔드이펙터와 카메라 사이의 변환 관계를 구하는 Hand-Eye Calibration 시스템. ROS2 Humble 기반 PyQt5 GUI에서 데이터 수집, 캘리브레이션 실행, 결과 저장까지 한 화면에서 처리하며, read-only 연결로 로봇 제어권을 가져오지 않아 펜던트 조작을 유지한 채 포즈 수집이 가능한 구조.
 
 ### 주요 구성요소
 
 - **gui_node** (Python): ROS2 노드 + PyQt5 GUI, 카메라 영상 표시, 포즈 수집, 캘리브레이션 실행
-- **calibration** (Python): ArUco 마커 검출, Tsai-Lenz / DQ RANSAC 솔버, 3D 시각화, CSV 입출력
+- **calibration** (Python): ArUco 마커 검출, AX=YB / DQ RANSAC / Tsai-Lenz 솔버, 3D 시각화, CSV 입출력
 - **robot_interface** (Python): UR Direct (read-only 소켓) 또는 ROS2 TF를 통한 로봇 포즈 획득
 - **dsr_pose_reader** (C++): Doosan 로봇 전용 포즈 리더, DRFL 모니터링으로 펜던트 제어 유지
 - **카메라 드라이버**: 사용 센서에 따라 선택 (RealSense: `realsense2_camera` apt 설치, Orbbec: `OrbbecSDK_ROS2` VCS 소스 빌드)
 
 ### 캘리브레이션 알고리즘
 
-**DQ RANSAC (기본, 권장)**
+**AX=YB**
+
+- **출처**: Ha, "Probabilistic Framework for Hand-Eye and Robot-World Calibration AX=YB", IEEE T-RO 2023
+- **방식**: 절대 포즈를 상대운동으로 합성하지 않고 그대로 사용하며, 카메라 측정의 노이즈가 보드(target) 쪽에 놓이는 배치를 유지한 채 최대우도추정으로 풀이. 닫힌형 초기해(Shah) 후 Levenberg-Marquardt로 정제
+- **장점**: 핸드아이 변환과 함께 base→board 변환도 산출해 교차 검증이 가능하며, 잔차 통계(회전 °/병진 mm)를 함께 보고
+- **정확도**: 합성 데이터(20 포즈 × 50회, 보드 노이즈 1°/3mm)에서 회전 0.130°, 병진 1.60mm
+
+**DQ RANSAC**
 
 - **출처**: Daniilidis, "Hand-Eye Calibration Using Dual Quaternions", IEEE 1999
 - **라이브러리**: [ethz-asl/hand_eye_calibration](https://github.com/ethz-asl/hand_eye_calibration)
 - **방식**: 회전과 이동을 Dual Quaternion으로 동시에 풀이하며 RANSAC으로 이상치를 자동 제거
-- **장점**: 노이즈/이상치에 강건, 권장 포즈 수 15개 이상
+- **장점**: 마커 오검출 등 불량 샘플이 섞인 데이터에 강건하고 인라이어 수를 함께 보고
+- **정확도**: 동일 조건에서 회전 0.555°, 병진 5.26mm
 
 **Tsai-Lenz**
 
 - **출처**: Tsai & Lenz, IEEE 1989
 - **방식**: 회전(R)을 SVD로 먼저 풀고 이동(t)을 최소자승법으로 풀이
 - **장점**: 매우 빠르고 간단하나 이상치 처리가 없어 깨끗한 데이터가 전제
+- **정확도**: 동일 조건에서 회전 0.471°, 병진 4.62mm
 
 **4-DOF Calibrator (향후)**
 
@@ -140,7 +151,9 @@
 
 **다중 로봇 지원**: UR Direct (read-only 소켓), Doosan DRFL (모니터링), ROS2 TF 세 가지 방식으로 펜던트 제어를 유지하며 포즈 획득
 
-**2가지 캘리브레이션 알고리즘**: DQ RANSAC (이상치에 강건), Tsai-Lenz (빠른 결과 확인)
+**3가지 캘리브레이션 알고리즘**: AX=YB (최고 정확도), DQ RANSAC (이상치에 강건), Tsai-Lenz (빠른 결과 확인)
+
+**포즈 데이터 신선도 검증**: 포즈 스트림이 멈추면 같은 값이 반복되어 정지 상태로 오인되므로, 수신 카운터가 실제로 증가했는지 확인한 뒤에만 캡처를 허용. 낡은 로봇 포즈가 최신 영상과 짝지어지는 사고를 캡처 시점에 차단
 
 **PyQt5 GUI**: 카메라 영상 실시간 표시, ArUco 마커 오버레이, 포즈 수집/삭제, 캘리브레이션 실행을 한 화면에서 처리
 
@@ -183,15 +196,16 @@
 │  └──────┬───────┘  └────────────────────┬─────────────────────┘         │
 │         │                               │                               │
 │  ┌──────┴───────────────────────────────┴──────┐                        │
-│  │ Capture Pose (store marker T + robot T)     │                        │
+│  │ Capture Pose (freshness-checked)            │                        │
+│  │ store marker T + robot T                    │                        │
 │  └──────────────────────┬──────────────────────┘                        │
 │                         │                                               │
 │  ┌──────────────────────┴──────────────────────┐                        │
 │  │ Calibration Solver                          │                        │
-│  │ - DQ RANSAC (default)   - Tsai-Lenz         │                        │
+│  │ - AX=YB   - DQ RANSAC   - Tsai-Lenz         │                        │
 │  └──────────────────────┬──────────────────────┘                        │
 │                         │                                               │
-│  Result: X (4x4, camera <-> end-effector)                               │
+│  Result: hand-eye (4x4) [+ base->board for AX=YB]                       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -199,7 +213,7 @@
 
 [영상] Camera driver → `image_raw`/`camera_info` 토픽 → ArUco Detector → 마커 포즈  
 [로봇 포즈] UR 소켓(30003) 또는 dsr_pose_reader → `/tf` → Robot Interface → 로봇 포즈  
-[캘리브레이션] 포즈 쌍 (15~30개) → DQ RANSAC / Tsai-Lenz → X (4x4) → `data/` 저장
+[캘리브레이션] 포즈 쌍 (15~30개) → AX=YB / DQ RANSAC / Tsai-Lenz → 4x4 변환 → `data/` 저장
 
 ---
 
@@ -234,9 +248,15 @@ Hand-eye_calibration/                           # ROS2 워크스페이스 루트
     │
     └── hand_eye_calibration/                   # 캘리브레이션 패키지 (Python)
         ├── config/default.yaml                 # ROS2 파라미터 (토픽, 마커, 로봇 모드)
+        ├── test/
+        │   ├── test_calibration.py             # 세 솔버 검증 (합성 데이터)
+        │   └── test_pose_readers.py            # 포즈 신선도 회귀 테스트
         └── hand_eye_calibration/
             ├── gui_node.py                     # 메인 ROS2 노드 + PyQt5 GUI
             ├── calibration/                    # ArUco 검출, 솔버, 시각화, CSV 입출력
+            │   ├── ax_yb.py                    # AX=YB 솔버 (Ha 2023)
+            │   ├── dual_quaternion_ransac.py   # DQ RANSAC 래퍼
+            │   └── tsai_lenz.py                # Tsai-Lenz 솔버
             ├── robot_interface/                # UR Direct 소켓 / ROS2 TF 포즈 리더
             ├── hand_eye_calibration_lib/       # ethz-asl DQ RANSAC 라이브러리 (추출)
             └── handeye_4dof_lib/               # 4-DOF 솔버 (추출, GUI 통합 예정)
@@ -482,6 +502,20 @@ colcon build --symlink-install \
 source install/setup.bash
 ```
 
+### 테스트
+
+솔버와 포즈 리더는 하드웨어 없이 합성 데이터로 검증 가능.
+
+```bash
+cd src/hand_eye_calibration
+python3 -m pytest test/ -v
+```
+
+| 파일                                                                       | 검증 대상                                                                    |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [test_calibration.py](src/hand_eye_calibration/test/test_calibration.py)   | 세 솔버가 참값을 복원하는지, 노이즈 조건에서 서로 일치하는지                 |
+| [test_pose_readers.py](src/hand_eye_calibration/test/test_pose_readers.py) | UR 소켓 패킷 재조립, TF 캐시 신선도 — 낡은 포즈가 최신값으로 오인되지 않는지 |
+
 ---
 
 ## 실행
@@ -606,11 +640,13 @@ GUI 상단에서:
 4. 15~30개 포즈를 다양한 각도로 수집
 5. 잘못된 데이터는 선택 후 **Delete Selected**
 
+> 로봇이 완전히 정지하고 포즈 데이터가 갱신 중일 때만 캡처가 허용되며, 조건을 만족하지 않으면 테두리가 붉게 깜박이고 캡처가 거부됨.
+
 ### 3. 캘리브레이션 실행
 
-1. 알고리즘 선택: **DQ RANSAC** (기본, 권장) 또는 **Tsai-Lenz**
+1. 알고리즘 선택: **AX=YB** (최고 정확도), **DQ RANSAC** (이상치에 강건), **Tsai-Lenz** (빠른 확인)
 2. **Calibrate** 클릭
-3. 결과: 4x4 변환 행렬 + RMSE 표시
+3. 결과: 4x4 변환 행렬 + 품질 지표 (AX=YB는 잔차 RMSE와 base→board 행렬, DQ RANSAC은 RMSE와 인라이어 수)
 
 ### 4. 결과 확인
 
@@ -696,6 +732,8 @@ hand_eye_calibration:
 | `marker_separation` | float  | 0.003       | 그리드 보드에서 마커 간 간격 (m)                      |
 | `board_grid_shape`  | list   | [5, 7]      | 그리드 보드의 (열, 행) 수                             |
 | `robot_mode`        | string | "ur_direct" | 로봇 포즈 획득 방식 ("ur_direct" / "ros2_tf")         |
+
+> `marker_length`와 `marker_separation`은 인쇄된 보드를 실측한 값으로 지정할 것. 인쇄 배율에 따라 설계값과 달라지며, 둘의 비율이 어긋나면 보이는 마커 조합마다 다른 보드 자세가 추정되어 캘리브레이션이 흔들림.
 
 ### Doosan 포즈 리더 파라미터
 
@@ -797,7 +835,24 @@ sudo usermod -aG plugdev $USER
 - 카메라에서 마커까지 거리: 0.3m ~ 2m 권장
 - `marker_length` 값이 실제 마커 크기와 일치하는지 확인
 
-### 4. cv_bridge NumPy 버전 충돌
+### 4. 캘리브레이션 결과가 부정확함
+
+증상:
+
+```
+잔차 RMSE가 회전 수 도, 병진 수십 mm 이상으로 나오거나
+DQ RANSAC 인라이어가 전체 샘플의 절반 이하
+```
+
+해결:
+
+- 인쇄된 보드를 실측해 `marker_length` / `marker_separation`이 맞는지 확인 — 둘의 비율이 어긋나면 보이는 마커 조합마다 보드 자세가 달라져 회전 오차가 커짐
+- 보드까지 거리를 0.3~0.4m로 두고 다양한 각도로 재수집
+- 포즈 쌍의 정합성을 직접 확인. 카메라가 손에 고정되어 있으면 두 자세 사이의 **로봇 상대 회전각과 카메라 상대 회전각이 같아야** 하며, 이 값이 1° 이상 어긋나는 쌍은 캘리브레이션 결과와 무관하게 물리적으로 성립하지 않는 데이터
+
+> 이 검사는 캘리브레이션 값을 몰라도 성립하므로, 수집한 CSV의 품질을 사후 판정하는 데 사용 가능.
+
+### 5. cv_bridge NumPy 버전 충돌
 
 증상:
 
@@ -811,7 +866,7 @@ AttributeError: module 'numpy' has no attribute 'bool'
 pip3 install 'numpy>=1.21.0,<2.0'
 ```
 
-### 5. Docker에서 GUI 표시 안 됨
+### 6. Docker에서 GUI 표시 안 됨
 
 증상:
 
@@ -829,7 +884,7 @@ xhost +local:docker
 echo $DISPLAY
 ```
 
-### 6. Orbbec 카메라 NVRAM 타임아웃
+### 7. Orbbec 카메라 NVRAM 타임아웃
 
 증상:
 
@@ -848,7 +903,7 @@ Failed to get NVRAM data, timeout
 
 > Femto Bolt는 12V 외부 전원 어댑터가 필수 (USB 버스 파워만으로는 부족).
 
-### 7. 대용량 센서 메시지 drop
+### 8. 대용량 센서 메시지 drop
 
 증상:
 
