@@ -87,6 +87,18 @@
   .badge.bad { color: var(--noise); background: color-mix(in srgb, var(--noise) 12%, transparent); }
   .badge.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
   .badge.plain { color: var(--sub); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  /* 표기 출처 표시 — 논문 기호와 프로젝트 기호를 구분 */
+  .badge.notation {
+    color: var(--unk); background: color-mix(in srgb, var(--unk) 12%, transparent);
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+  }
+  table.map { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 14px 0 0; }
+  table.map th, table.map td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  table.map th { font-size: 12px; letter-spacing: .04em; color: var(--sub); font-weight: 600; }
+  table.map td.sym { font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+  table.map td.paper { color: var(--unk); }
+  table.map td.proj { color: var(--ok); }
+  table.map td.arrow { font-size: 12.5px; color: var(--sub); }
 
   .cases { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
   @media (max-width: 640px) { .cases { grid-template-columns: 1fr; } }
@@ -246,17 +258,74 @@
       <span><span class="swatch dashed" style="border-color: var(--unk)"></span>추정할 미지수 (X, Y)</span>
       <span><span class="swatch dashed" style="border-color: var(--noise)"></span>노이즈 M</span>
     </div>
-    <p class="caption">두 경로의 일치: <b>A<sub>i</sub> · Y · B<sub>i</sub> = X</b>, 정리하면 논문의 AX = YB 꼴.
-    거리 최소화 min Σ d(A<sub>i</sub>X, YB<sub>i</sub>)²가 MLE와 같아지는 조건은 하나뿐 —
+    <p class="caption">두 경로의 일치: <b>A<sub>i</sub> · Y · B<sub>i</sub> = X</b>.
+    거리 최소화가 MLE와 같아지는 조건은 하나뿐 —
     <b style="color: var(--robot)">A는 무잡음(noiseless)</b>,
     <b style="color: var(--cam)">B는 target 쪽 오른쪽 곱 등방성 노이즈(right-translated isotropic)</b>.</p>
+  </div>
+
+  <h3 style="font-size:16px; font-weight:680; margin:28px 0 10px;">기호 대응 — 논문 표기와 프로젝트 표기</h3>
+  <p>논문의 표준형 <code class="ref">AX = YB</code>는 위 다이어그램과 <b>X·Y·B가 같은 것을 가리키고 A만 다릅니다.</b>
+  행렬 곱은 순서를 바꿀 수 없으므로, 두 형태를 잇는 것은 순서 교환이 아니라
+  <b>양변 왼쪽에 A<sub>i</sub><sup>−1</sup>을 곱하는 연산</b>입니다.</p>
+
+  <div class="panel">
+    <div class="eq" style="font-size:13px; margin-bottom:6px;">
+      <span class="tok robot">A<sub>i</sub></span><span class="op">·</span>
+      <span class="tok">Y</span><span class="op">·</span>
+      <span class="tok cam">B<sub>i</sub></span><span class="op">=</span>
+      <span class="tok">X</span>
+      <span class="op" style="margin:0 10px;">— 양변 왼쪽에 A<sub>i</sub><sup>−1</sup> —▶</span>
+      <span class="tok robot">A<sub>i</sub><sup>−1</sup></span><span class="op">·</span>
+      <span class="tok">X</span><span class="op">=</span>
+      <span class="tok">Y</span><span class="op">·</span>
+      <span class="tok cam">B<sub>i</sub></span>
+    </div>
+    <p style="margin:10px 0 0; font-size:13px; color:var(--sub);">
+      프레임 검사 — 좌변 (hand→base)(base→board) = hand→board,
+      우변 (hand→cam)(cam→board) = hand→board. 양변이 일치.
+    </p>
+
+    <table class="map">
+      <tr>
+        <th>논문 표기</th><th>프로젝트 표기</th><th>화살표</th><th>역할</th>
+      </tr>
+      <tr>
+        <td class="sym paper">A<sub>i</sub></td><td class="sym proj">A<sub>i</sub><sup>−1</sup></td>
+        <td class="arrow">hand → base</td><td>로봇 측정의 <b>역행렬</b> (무잡음이라 뒤집어도 무해)</td>
+      </tr>
+      <tr>
+        <td class="sym paper">X</td><td class="sym proj">X</td>
+        <td class="arrow">base → board</td><td><b>robot-world</b> · 미지수</td>
+      </tr>
+      <tr>
+        <td class="sym paper">Y</td><td class="sym proj">Y</td>
+        <td class="arrow">hand → camera</td><td><b>hand-eye</b> · 미지수</td>
+      </tr>
+      <tr>
+        <td class="sym paper">B<sub>i</sub></td><td class="sym proj">B<sub>i</sub></td>
+        <td class="arrow">cam → board</td><td>카메라 원시 측정 <b>그대로</b></td>
+      </tr>
+    </table>
+
+    <p class="caption"><b style="color:var(--ok)">핵심</b> — 역행렬이 붙는 쪽은 <b>무잡음인 A</b>뿐이고,
+    노이즈가 있는 <b>B는 건드리지 않음</b>. 그래서 <code class="ref">B = T̄ · M</code>의 오른쪽 곱 구조가 그대로 유지됨.
+    무잡음 변환은 뒤집어도 잃을 것이 없지만, 노이즈가 있는 변환을 뒤집으면
+    <code class="ref">B⁻¹ = M⁻¹ T̄⁻¹</code>로 노이즈가 왼쪽으로 옮겨가 가정이 깨짐.
+    논문이 A만 뒤집은 것은 우연이 아님.</p>
+
+    <p class="caption">검증 — 논문 식 (15) <code class="ref">M = X⁻¹ A⁻¹ Y B</code>에 화살표를 넣으면
+    (board→base)(base→hand)(hand→cam)(cam→board) = <b>board→board</b>,
+    즉 보드 프레임의 자기 루프가 되어 "노이즈는 target(보드)에 있다"는 정의와 일치.
+    프로젝트 코드 <code class="ref">ax_yb.py</code>의 <code class="ref">M = X_inv @ A @ Y @ B</code>는
+    논문의 A<sup>−1</sup> 자리에 base→hand를 넣은 것이므로 동일한 식.</p>
   </div>
 </section>
 
 <!-- ══════════ 2. 노이즈 이동 ══════════ -->
 <section>
   <div class="eyebrow">2 · 핵심 메커니즘</div>
-  <h2>변환을 조작하면 노이즈도 이사</h2>
+  <h2>변환을 조작하면 노이즈도 이사 <span class="badge notation">프로젝트 표기</span></h2>
   <p>카메라 원시 측정은 노이즈가 오른쪽 끝에 붙은 이상적인 형태. 그런데 역행렬을 취하거나
   relative motion으로 합성하는 순간 <b style="color:var(--noise)">노이즈 M의 위치가 이동</b>하면서
   거리 최소화의 가정이 깨지는 구조. 세 솔버가 입력을 다루는 방식을 그대로 옮기면:</p>
@@ -309,9 +378,12 @@
 <!-- ══════════ 3. 네 배치 ══════════ -->
 <section>
   <div class="eyebrow">3 · 논문의 검증</div>
-  <h2>같은 루프, 네 가지 배치 — 오직 하나만 최적</h2>
+  <h2>같은 루프, 네 가지 배치 — 오직 하나만 최적 <span class="badge notation">논문 표기</span></h2>
   <p>A·B를 스왑하거나 역행렬한 네 배치는 수학적으로 동일한 루프를 만들지만,
   논문의 수치 실험(Fig 5)과 UR3e 하드웨어 실험(Fig 13–14) 모두에서 <b>Case 1만 최저 오차</b>를 기록.</p>
+  <p class="note">아래 네 수식은 논문 식 (67)을 그대로 옮긴 것이라 <b>논문 표기</b>를 따름 —
+  여기서 <b>A는 hand→base</b>(프로젝트 A의 역행렬)이고, X·Y·B는 프로젝트 표기와 같은 것을 가리킴.
+  Case 1이 최적인 이유는 이 배치에서만 <b>B의 노이즈가 오른쪽 곱으로 남기</b> 때문.</p>
 
   <div class="cases">
     <div class="case best">
@@ -349,7 +421,7 @@
 <!-- ══════════ 4. 세 솔버의 풀이 방식 ══════════ -->
 <section>
   <div class="eyebrow">4 · 풀이 방식</div>
-  <h2>세 솔버는 각각 어떻게 답을 구하나</h2>
+  <h2>세 솔버는 각각 어떻게 답을 구하나 <span class="badge notation">프로젝트 표기</span></h2>
   <p>셋 다 결국 hand-eye 변환(EE→camera)을 내놓지만, 도달하는 경로가 서로 다름.
   rotation과 translation을 나눠 푸는지 함께 푸는지, relative motion을 만드는지
   absolute pose를 그대로 쓰는지가 갈리는 지점.</p>
@@ -474,7 +546,9 @@
     늘려 루프를 닫으면 카메라 노이즈가 정의된 자리에 그대로 남으며, 그 크기를 직접 최소화.</p>
     <ol class="steps">
       <li><b>Closed-form 초기해</b> — Shah 방법(<code>cv2.calibrateRobotWorldHandEye</code>)으로 X, Y의 출발점을 확보.
-        초기값 단계라 배치 편향이 치명적이지 않음.</li>
+        초기값 단계라 배치 편향이 치명적이지 않음.
+        OpenCV는 <code>world2cam</code>에 측정값을 그대로, <code>base2gripper</code>에 <code>inv(A)</code>를 요구하므로
+        인자 방향을 대응표로 확인해 넘길 것.</li>
       <li><b>노이즈를 식으로 표현</b> — 루프에서 각 샘플의 노이즈를 그대로 추출:
         <code>M<sub>i</sub> = X<sup>−1</sup> A<sub>i</sub> Y B<sub>i</sub></code>.
         측정이 완벽하면 M<sub>i</sub>는 identity.</li>
