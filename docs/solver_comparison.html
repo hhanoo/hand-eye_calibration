@@ -13,6 +13,7 @@
     --ok: #2E7D5B;
     --warn: #A66A1F;
     --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, Menlo, monospace;
+    --sans: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -32,7 +33,7 @@
   html { background: var(--bg); }
   body {
     background: var(--bg); color: var(--ink);
-    font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+    font-family: var(--sans);
     font-size: 15.5px; line-height: 1.75; margin: 0; -webkit-font-smoothing: antialiased;
     /* 한글은 기본적으로 음절마다 끊기므로 어절 단위로 묶는다 */
     word-break: keep-all;
@@ -68,6 +69,10 @@
   .swatch { width: 18px; height: 0; border-top: 3px solid; border-radius: 2px; }
   .swatch.dashed { border-top-style: dashed; }
 
+  .notekey { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+             font-size: 12.5px; color: var(--sub); padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .notekey b { color: var(--ink); font-weight: 680; letter-spacing: .04em; }
+  .notekey .rel { flex-basis: 100%; }
   .eqrow { display: grid; grid-template-columns: 168px 1fr; gap: 8px 18px; align-items: center; padding: 14px 0; }
   .eqrow + .eqrow { border-top: 1px solid var(--line); }
   .eqrow .who { font-size: 13.5px; font-weight: 650; }
@@ -81,6 +86,19 @@
   .tok.robot { border-color: color-mix(in srgb, var(--robot) 55%, var(--line)); color: var(--robot); }
   .eq .op { color: var(--sub); }
   .eqverdict { grid-column: 2; font-size: 13px; }
+
+  /* 식을 덩어리로 끊어 각 덩어리가 무엇인지 아래에 붙이는 분해도 */
+  .split { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 18px; }
+  .splithead { font-size: 13px; color: var(--sub); margin-bottom: 14px; }
+  .splithead b { color: var(--ink); font-weight: 660; }
+  .grp { display: inline-flex; flex-direction: column; align-items: stretch; gap: 9px; }
+  .grp .grpeq { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px; }
+  .grp .lab {
+    font-family: var(--sans); font-size: 11.5px; line-height: 1.5; color: var(--sub);
+    text-align: center; padding-top: 7px;
+    border-top: 1px solid color-mix(in srgb, var(--sub) 40%, transparent);
+  }
+  .grp .lab sub, .grp .lab sup { font-size: 0.75em; }
 
   .badge { display: inline-block; font-size: 12px; font-weight: 650; border-radius: 99px; padding: 2.5px 11px; white-space: nowrap; vertical-align: 1px; }
   .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
@@ -309,10 +327,12 @@
     </table>
 
     <p class="caption"><b style="color:var(--ok)">핵심</b> — 역행렬이 붙는 쪽은 <b>무잡음인 A</b>뿐이고,
-    노이즈가 있는 <b>B는 건드리지 않음</b>. 그래서 <code class="ref">B = T̄ · M</code>의 오른쪽 곱 구조가 그대로 유지됨.
+    노이즈가 있는 <b>B는 건드리지 않음</b>. 그래서
+    <code class="ref">B<sub>i</sub> = <span class="bar">B</span><sub>i</sub> · M<sub>i</sub></code>의 오른쪽 곱 구조가 그대로 유지됨
+    (<code class="ref"><span class="bar">B</span><sub>i</sub></code>는 그 측정의 <b>참값</b>, 즉 노이즈가 없었다면 나왔을 값).
     무잡음 변환은 뒤집어도 잃을 것이 없지만, 노이즈가 있는 변환을 뒤집으면
-    <code class="ref">B⁻¹ = M⁻¹ T̄⁻¹</code>로 노이즈가 왼쪽으로 옮겨가 가정이 깨짐.
-    논문이 A만 뒤집은 것은 우연이 아님.</p>
+    <code class="ref">B<sub>i</sub><sup>−1</sup> = M<sub>i</sub><sup>−1</sup> <span class="bar">B</span><sub>i</sub><sup>−1</sup></code>로
+    노이즈가 왼쪽으로 옮겨가 가정이 깨짐. 논문이 A만 뒤집은 것은 우연이 아님.</p>
 
     <p class="caption">검증 — 논문 식 (15) <code class="ref">M = X⁻¹ A⁻¹ Y B</code>에 화살표를 넣으면
     (board→base)(base→hand)(hand→cam)(cam→board) = <b>board→board</b>,
@@ -331,30 +351,39 @@
   거리 최소화의 가정이 깨지는 구조. 세 솔버가 입력을 다루는 방식을 그대로 옮기면:</p>
 
   <div class="panel">
+    <div class="notekey">
+      <b>기호</b>
+      <span><code class="ref">B<sub>i</sub></code> 카메라 원시 측정 (cam→board, 노이즈 포함)</span>
+      <span><code class="ref"><span class="bar">B</span><sub>i</sub></code> 그 측정의 참값 (noiseless)</span>
+      <span><code class="ref">M<sub>i</sub></code> 보드 프레임에 오른쪽 곱으로 붙는 노이즈</span>
+      <span class="rel">관계는 <code class="ref">B<sub>i</sub> = <span class="bar">B</span><sub>i</sub> · M<sub>i</sub></code> 하나뿐이며, 아래 네 줄은 모두 여기서 유도된 것</span>
+    </div>
     <div class="eqrow">
       <div class="who">원시 측정<small>ArUco 검출 결과</small></div>
       <div class="eq">
-        <span>T<sub>cam→board</sub></span><span class="op">=</span>
-        <span class="tok cam"><span class="bar">T</span></span><span class="op">·</span><span class="tok noise">M</span>
+        <span>B<sub>i</sub></span><span class="op">=</span>
+        <span class="tok cam"><span class="bar">B</span><sub>i</sub></span><span class="op">·</span>
+        <span class="tok noise">M<sub>i</sub></span>
       </div>
       <div class="eqverdict"><span class="badge ok">✓ 논문의 가정과 일치</span> &nbsp;노이즈가 target(보드) 쪽 오른쪽 곱 — 이대로 쓰는 것이 최적</div>
     </div>
     <div class="eqrow">
       <div class="who">Tsai-Lenz 입력<small>relative motion 합성</small></div>
       <div class="eq">
-        <span>B<sub>ij</sub></span><span class="op">=</span>
-        <span class="tok cam"><span class="bar">T</span><sub>j</sub></span><span class="op">·</span>
+        <span>B<sub>j</sub> B<sub>i</sub><sup>−1</sup></span><span class="op">=</span>
+        <span class="tok cam"><span class="bar">B</span><sub>j</sub></span><span class="op">·</span>
         <span class="tok noise">M<sub>j</sub></span><span class="op">·</span>
         <span class="tok noise">M<sub>i</sub><sup>−1</sup></span><span class="op">·</span>
-        <span class="tok cam"><span class="bar">T</span><sub>i</sub><sup>−1</sup></span>
+        <span class="tok cam"><span class="bar">B</span><sub>i</sub><sup>−1</sup></span>
       </div>
       <div class="eqverdict"><span class="badge bad">✗ 노이즈 두 개가 가운데 낌</span> &nbsp;합성 방향을 바꿔도 순수한 오른쪽 곱은 불가능 — AX=XB 형식 자체의 한계</div>
     </div>
     <div class="eqrow">
       <div class="who">DQ RANSAC 입력<small>라이브러리 규약상 반전</small></div>
       <div class="eq">
-        <span>inv(T)</span><span class="op">=</span>
-        <span class="tok noise">M<sup>−1</sup></span><span class="op">·</span><span class="tok cam"><span class="bar">T</span><sup>−1</sup></span>
+        <span>B<sub>i</sub><sup>−1</sup></span><span class="op">=</span>
+        <span class="tok noise">M<sub>i</sub><sup>−1</sup></span><span class="op">·</span>
+        <span class="tok cam"><span class="bar">B</span><sub>i</sub><sup>−1</sup></span>
       </div>
       <div class="eqverdict"><span class="badge warn">△ 노이즈가 왼쪽으로 이동</span> &nbsp;ethz-asl 라이브러리가 world→eye 방향을 요구 — 규약상 불가피</div>
     </div>
@@ -368,6 +397,43 @@
         <span class="tok cam">B<sub>i</sub></span>
       </div>
       <div class="eqverdict"><span class="badge ok">✓ 변형 없음</span> &nbsp;합성도 반전도 없이 absolute pose를 직접 사용 — 노이즈가 정의된 자리에서 평가됨</div>
+    </div>
+
+    <div class="split">
+      <div class="splithead">AX=YB 행 자세히 — <b>M<sub>i</sub>는 예측과 측정의 차이</b></div>
+      <div class="eq">
+        <span>M<sub>i</sub></span><span class="op">=</span>
+        <span class="grp">
+          <span class="grpeq">
+            <span class="tok">X<sup>−1</sup></span><span class="op">·</span>
+            <span class="tok robot">A<sub>i</sub></span><span class="op">·</span>
+            <span class="tok">Y</span>
+          </span>
+          <span class="lab">예측한 <span class="bar">B</span><sub>i</sub><sup>−1</sup> · board→cam</span>
+        </span>
+        <span class="op">·</span>
+        <span class="grp">
+          <span class="grpeq"><span class="tok cam">B<sub>i</sub></span></span>
+          <span class="lab">실제 측정 · cam→board</span>
+        </span>
+      </div>
+      <p class="caption">왼쪽 세 항은 <b>카메라를 전혀 쓰지 않고</b> "지금 X·Y 후보가 맞다면 보드가 여기 보였어야 한다"를
+      계산한 값 — 참값 <code class="ref"><span class="bar">B</span><sub>i</sub></code>의 역행렬.
+      여기에 실제 측정을 곱하면 board→board 자기 루프가 되어 <b>어긋난 만큼만</b> 남음.
+      스칼라의 <code class="ref">잔차 = 측정 − 예측</code>을 SE(3)로 옮긴 형태로,
+      뺄셈이 <code class="ref">예측<sup>−1</sup> ·</code>로, 0이 identity로 바뀐 것.
+      측정이 완벽하면 <code class="ref">M<sub>i</sub> = I</code>.</p>
+      <p class="caption">예측이 <b>왼쪽</b>에 붙는 것도 필연 —
+      <code class="ref">B<sub>i</sub> = <span class="bar">B</span><sub>i</sub> · M<sub>i</sub></code>에서
+      <code class="ref"><span class="bar">B</span><sub>i</sub></code>가 M의 왼쪽에 있으니 왼쪽에서만 지워짐.
+      오른쪽으로 곱하면 <code class="ref"><span class="bar">B</span> M <span class="bar">B</span><sup>−1</sup></code>가 되어
+      같은 노이즈가 <b>카메라 프레임으로 회전</b>되고, 로봇 자세마다 분포가 달라져 등방성 가정이 깨짐.</p>
+      <p class="caption">최적화가 움직이는 것은 <b>X·Y 12개 파라미터뿐</b>이고 A·B는 고정된 데이터.
+      비용 <code class="ref">Σ ‖log R<sub>M</sub>‖² + w²‖t<sub>M</sub>‖²</code>를 줄인다는 것은 곧
+      <b>모든 M<sub>i</sub>를 identity로 미는 것</b>이며, 이것이 MLE.
+      샘플 하나가 residual 하나를 만들어 서로 독립이라, 같은 측정이 여러 쌍에 재사용되는 relative motion과 갈리는 지점.
+      <code class="ref">M<sub>i</sub></code>의 translation 성분은 <b>보드 원점이 몇 mm 어긋나 보였는지</b>라
+      GUI가 찍는 residual RMSE(° / mm)가 그대로 물리량.</p>
     </div>
   </div>
 
@@ -504,8 +570,9 @@
         <code>A<sub>ij</sub> = A<sub>j</sub><sup>−1</sup>A<sub>i</sub></code>,
         <code>B<sub>ij</sub> = B<sub>j</sub>B<sub>i</sub><sup>−1</sup></code>를 생성. 프로젝트 구현은 모든 (i, j) 조합을 사용.</li>
       <li><b>Rotation 추정</b> — 각 쌍의 rotation을 axis-angle 벡터로 바꿔 outer product의 합
-        <code>M = Σ log(R<sub>B</sub>) · log(R<sub>A</sub>)<sup>T</sup></code>을 쌓고,
-        <code>R<sub>X</sub> = (M<sup>T</sup>M)<sup>−1/2</sup> M<sup>T</sup></code>로 orthogonalize.</li>
+        <code>S = Σ log(R<sub>B</sub>) · log(R<sub>A</sub>)<sup>T</sup></code>을 쌓고,
+        <code>R<sub>X</sub> = (S<sup>T</sup>S)<sup>−1/2</sup> S<sup>T</sup></code>로 orthogonalize
+        (누적 행렬은 노이즈 M과 구분해 S로 표기).</li>
       <li><b>Translation 추정</b> — 확정된 R<sub>X</sub>를 대입해
         <code>(I − R<sub>A</sub>) t<sub>X</sub> = t<sub>A</sub> − R<sub>X</sub> t<sub>B</sub></code>를
         모든 쌍에 대해 쌓아 least squares로 풀이.</li>
