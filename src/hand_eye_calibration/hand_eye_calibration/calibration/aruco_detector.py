@@ -16,8 +16,8 @@ class ArUcoDetector:
         marker_size=6,
         total_markers=250,
         grid_shape=(5, 7),
-        marker_length=0.037,
-        marker_separation=0.003,
+        marker_length=0.0375,
+        marker_separation=0.00375,
     ):
         """
         Args:
@@ -39,13 +39,15 @@ class ArUcoDetector:
         cols, rows = grid_shape
         board_w = cols * marker_length + (cols - 1) * marker_separation
         board_h = rows * marker_length + (rows - 1) * marker_separation
-        self.corner_offsets = np.array([
-            [0.0, 0.0, 0.0],              # 좌하단 (원점)
-            [board_w, 0.0, 0.0],           # 우하단
-            [0.0, board_h, 0.0],           # 좌상단
-            [board_w, board_h, 0.0],       # 우상단
-            [board_w / 2, board_h / 2, 0.0],  # 정중앙
-        ])
+        self.corner_offsets = np.array(
+            [
+                [0.0, 0.0, 0.0],  # 좌하단 (원점)
+                [board_w, 0.0, 0.0],  # 우하단
+                [0.0, board_h, 0.0],  # 좌상단
+                [board_w, board_h, 0.0],  # 우상단
+                [board_w / 2, board_h / 2, 0.0],  # 정중앙
+            ]
+        )
 
     def detect(self, color_img, camera_matrix, dist_coeffs):
         """
@@ -84,8 +86,12 @@ class ArUcoDetector:
         for offset in self.corner_offsets:
             corner_tvec = tvec.flatten() + Rotmat @ offset
             annotated = cv2.drawFrameAxes(
-                annotated, camera_matrix, dist_coeffs,
-                rvec, corner_tvec.reshape(3, 1), axis_length,
+                annotated,
+                camera_matrix,
+                dist_coeffs,
+                rvec,
+                corner_tvec.reshape(3, 1),
+                axis_length,
             )
 
         T = np.eye(4)

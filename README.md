@@ -222,7 +222,7 @@
 ```
 Hand-eye_calibration/                           # ROS2 워크스페이스 루트
 ├── .github/workflows/release.yml               # 태그 push 시 GitHub Release 자동 생성
-├── board_6x6_259.pdf                           # ArUco 그리드 보드 인쇄용 PDF
+├── board_6x6_259.pdf                           # ArUco 그리드 보드 인쇄용 PDF (A4 원본 크기)
 ├── camera_realsense.repos                      # VCS: realsense-ros v4.55.1
 ├── camera_orbbec.repos                         # VCS: OrbbecSDK_ROS2 v2-main
 ├── data/                                       # 포즈 CSV, 캘리브레이션 결과 (git 미추적)
@@ -710,8 +710,8 @@ hand_eye_calibration:
     # ArUco 마커 설정
     marker_dict: 10 # cv2.aruco.DICT_6X6_250
     board_grid_shape: [5, 7] # 그리드 보드 (cols, rows)
-    marker_length: 0.037 # 마커 크기 (m)
-    marker_separation: 0.003 # 마커 간격 (m)
+    marker_length: 0.0375 # 마커 크기 (m)
+    marker_separation: 0.00375 # 마커 간격 (m)
 
     # 로봇 설정
     robot_mode: "ur_direct" # "ur_direct" 또는 "ros2_tf"
@@ -728,12 +728,14 @@ hand_eye_calibration:
 
 | 파라미터            | 타입   | 기본값      | 설명                                                  |
 | ------------------- | ------ | ----------- | ----------------------------------------------------- |
-| `marker_length`     | float  | 0.037       | ArUco 마커 한 변의 실제 크기 (m) — 정확도에 매우 중요 |
-| `marker_separation` | float  | 0.003       | 그리드 보드에서 마커 간 간격 (m)                      |
+| `marker_length`     | float  | 0.0375      | ArUco 마커 한 변의 실제 크기 (m) — 정확도에 매우 중요 |
+| `marker_separation` | float  | 0.00375     | 그리드 보드에서 마커 간 간격 (m)                      |
 | `board_grid_shape`  | list   | [5, 7]      | 그리드 보드의 (열, 행) 수                             |
 | `robot_mode`        | string | "ur_direct" | 로봇 포즈 획득 방식 ("ur_direct" / "ros2_tf")         |
 
-> `marker_length`와 `marker_separation`은 인쇄된 보드를 실측한 값으로 지정할 것. 인쇄 배율에 따라 설계값과 달라지며, 둘의 비율이 어긋나면 보이는 마커 조합마다 다른 보드 자세가 추정되어 캘리브레이션이 흔들림.
+> 위 기본값 37.5mm / 3.75mm는 `board_6x6_259.pdf`를 **A4 용지에 원본 크기(배율 100%)로 인쇄**했을 때의 치수. 이 조건에서 보드 전체는 285.0 × 202.5mm, 격자 피치는 41.25mm이므로, 마커 7개가 늘어선 방향의 6피치가 247.5mm, 5개 방향의 4피치가 165.0mm인지로 검증 가능.
+>
+> "용지에 맞춤" 등 배율이 적용된 상태로 인쇄했다면 `marker_length`와 `marker_separation`은 인쇄된 보드를 실측한 값으로 지정할 것. 인쇄 배율에 따라 설계값과 달라지며, 둘의 비율이 어긋나면 보이는 마커 조합마다 다른 보드 자세가 추정되어 캘리브레이션이 흔들림.
 
 ### Doosan 포즈 리더 파라미터
 
